@@ -1,0 +1,11 @@
+# android-app (ILCE Remote fork) build outputs
+**/build/
+.gradle/
+local.properties
+*.apk
+# 기기/런타임 로그 (SSID·IP 등 개인정보 포함 가능)
+*.log
+# NOTE(audit): jniLibs stripped native libs
+
+# 서드파티 바이너리(재획득): Sony-PMCA-RE
+pmca-console

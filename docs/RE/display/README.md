@@ -1,0 +1,12 @@
+# display — 패널/OSD 출력 RE
+
+패널은 VPH가 비디오(ch51)와 OSD(ch53) 두 평면을 합성해 출력하며, OSD 소스는 단일 레지스터 `+0x20`이라는 점이 이 카테고리의 핵심이다. 순정 OSD는 GPU 없이 CPU 래스터 후 VDF DMA로 나가고, Rigel/GPU 합성은 라이브뷰 중 패널에 닿지 않는다. 그래서 route-b는 in-proc detour-swap과 single-buffer in-place present로 패널에 도달한다. 현재 남은 성능 한계는 `/dev/mem`의 strongly-ordered 매핑이며, 해법은 Sony가 쓰는 `/dev/stream`(non-cached write-buffered) 매핑으로 바꾸는 것이다(0006, cached/dcache clean 아님). 이 카테고리의 조사는 대부분 에뮬 기반이다.
+
+| 번호 | 제목 | 한 줄 판정 |
+|---|---|---|
+| 0001 | [gpu-compositing-investigation](<0001. gpu-compositing-investigation.md>) | GPU 합성 불가. 진짜 병목은 uncached 매핑이며 cached 매핑으로 해결 가능 |
+| 0002 | [present-pipeline](<0002. present-pipeline.md>) | detour-swap + single-buffer in-place + 행 dirty 추적으로 순정급 반응성 |
+| 0003 | [panel-routing](<0003. panel-routing.md>) | 패널 = ch51 + ch53, OSD 소스는 `+0x20` 단일 레지스터, mux 없음 |
+| 0004 | [rigel-client-attempt](<0004. rigel-client-attempt.md>) | 별도 프로세스 Rigel 클라이언트는 패널 미도달, 영구 종료 |
+| 0005 | [osd-submit-paths-per-view](<0005. osd-submit-paths-per-view.md>) | 촬영=SenserIf(phys@+20), 메뉴/정보/재생=FbContainer 위젯(BMP핸들@+28) — detour-swap은 촬영 전용, funcMode 23에서 우리 메뉴 미표시. 수정=23 진입 차단 + `mgr+100` present 비활성 |
+| 0006 | [cached-osd-mapping-recipe](<0006. cached-osd-mapping-recipe.md>) | 바닥은 `/dev/mem` strongly-ordered. Sony는 `/dev/stream`(stream.ko가 `L_PTE_MT` clear=non-cached write-buffered)으로 빠른 것 — **cached 아님, dcache clean 불필요, 배리어만**. 최소수정=매핑 디바이스 `/dev/mem`→`/dev/stream`. GRM lock/unlock(`0x555B4C`/`0x555B5C`) 오프셋·vtable(+76/+80)·시그니처 WIP 정확, 메커니즘 서술만 교정 |

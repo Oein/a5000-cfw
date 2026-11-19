@@ -1,0 +1,25 @@
+# Android(2.3.7) 쪽 bionic 네이티브 빌드
+#   docker run --rm -v $PWD:/work a5k-ndk make -f Makefile.ndk <target>
+# 헤더: NDK android-9 (libc/EGL/GLES) + AOSP 2.3.7 (frameworks/base, system/core, libhardware)
+# 링크: 카메라의 실제 Android 라이브러리 (sysroot-android/lib)
+PLAT := $(NDK)/platforms/android-9/arch-arm
+CXX  := arm-linux-androideabi-g++
+ARCH := -march=armv7-a -mthumb -mfpu=vfpv3-d16 -mfloat-abi=softfp
+AOSP := /work/aosp
+INC  := -I$(AOSP)/fwbase -I$(AOSP)/syscore -I$(AOSP)/libhw -I$(NDK)/sources/cxx-stl/system/include -isystem $(PLAT)/usr/include
+DEFS := -include $(AOSP)/syscore/arch/linux-arm/AndroidConfig.h -DANDROID
+CXXFLAGS := $(ARCH) -O2 -Wall -fno-exceptions -fno-rtti -fno-stack-protector --sysroot=$(PLAT) $(INC) $(DEFS)
+DEV  := /work/sysroot-android/lib
+LDFLAGS := $(ARCH) -nostdlib -Wl,--dynamic-linker=/system/bin/linker -Wl,-z,nocopyreloc \
+           -L$(DEV) -Wl,-rpath-link,$(DEV) $(PLAT)/usr/lib/crtbegin_dynamic.o
+LDEND := $(shell arm-linux-androideabi-gcc -print-libgcc-file-name) $(PLAT)/usr/lib/crtend_android.o
+
+sftest/SFTEST: sftest/sftest.cpp
+	$(CXX) $(CXXFLAGS) -c -o sftest/sftest.o $<
+	$(CXX) $(LDFLAGS) -o $@ sftest/sftest.o -lsurfaceflinger_client -lui -lbinder -lutils -lcutils -lEGL -lGLESv2 -llog -lstdc++ -lc -lm -ldl $(LDEND)
+
+# Experiment 1: direct gralloc rgl* / ws_hal_* Rigel client (no SurfaceComposerClient).
+# All graphics libs are dlopen'd at runtime, so only libc/dl/m are linked.
+sftest/RGLTEST: sftest/rgltest.cpp
+	$(CXX) $(CXXFLAGS) -c -o sftest/rgltest.o $<
+	$(CXX) $(LDFLAGS) -o $@ sftest/rgltest.o -llog -lc -lm -ldl $(LDEND)

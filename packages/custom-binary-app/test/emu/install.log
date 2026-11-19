@@ -1,0 +1,25 @@
+Using drivers socket-MSC, socket-MTP, socket-vendor-specific
+Looking for Sony devices
+Waiting for the emulated camera to start its USB gadget...
+
+Querying MTP device
+Sony Corporation ILCE-5000 is a camera in MTP mode
+
+Switching to app install mode
+Waiting for camera to switch...
+Waiting for the emulated camera to reconnect...
+Analyzing apk
+
+Package: dev.oein.a5knative
+Version: m0
+
+Starting task
+Starting communication
+Uploading 0%
+Uploading 100%
+Downloading 100%
+Installing 0%
+Installing 100%
+Uploading 0%
+Uploading 100%
+Task completed successfully

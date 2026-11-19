@@ -1,0 +1,16 @@
+# docker run --rm -v $PWD:/work a5k-cross make -f Makefile.cross <target>
+CXX := arm-linux-gnueabi-g++
+CC  := arm-linux-gnueabi-gcc
+ARCH := -march=armv7-a -mthumb -mfpu=vfpv3-d16 -mfloat-abi=softfp
+SYS := /work/sysroot/lib
+CFLAGS := $(ARCH) -O2 -Wall -fno-stack-protector -U_FORTIFY_SOURCE
+LDFLAGS := $(ARCH) -nodefaultlibs -L$(SYS) -Wl,-rpath-link,$(SYS) -Wl,--dynamic-linker=/lib/ld-linux.so.3 -Wl,--hash-style=sysv
+LIBS := -lstdc++ -lm -lc /usr/arm-linux-gnueabi/lib/libc_nonshared.a -lgcc_s -lgcc
+
+hello/HELLO: hello/hello.cpp
+	$(CXX) $(CFLAGS) -c -o hello/hello.o $<
+	$(CXX) $(LDFLAGS) -o $@ hello/hello.o -Wl,--no-as-needed -lsdcom -losal_uipc -lpthread $(LIBS)
+
+sdcom/SDPROBE: sdcom/sdprobe.cpp sdcom/sdcom.h
+	$(CXX) $(CFLAGS) -fno-exceptions -c -o sdcom/sdprobe.o sdcom/sdprobe.cpp
+	$(CXX) $(LDFLAGS) -o $@ sdcom/sdprobe.o -lsdcom -losal_uipc -lpthread $(LIBS)

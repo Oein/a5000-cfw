@@ -1,0 +1,7 @@
+# packages/data — Sony-proprietary / device-private material (NEVER committed)
+#
+# Only this README.md is tracked. Everything else is gitignored and must never
+# reach the public repo.
+*
+!.gitignore
+!README.md

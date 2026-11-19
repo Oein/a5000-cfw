@@ -1,0 +1,73 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'dev.oein.ilceremote'
+    compileSdk 35
+    buildToolsVersion '35.0.0'
+
+    defaultConfig {
+        applicationId 'dev.oein.a5kui'
+        // ILCE-5000 runs Android 2.3.7 (API 10)
+        minSdk 10
+        //noinspection ExpiredTargetSdkVersion
+        targetSdk 10
+        versionCode 22
+        versionName 'a5k-2.2-complete'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // PMCA accepts debug-signed APKs; sign release with the debug key until we need our own
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        // D8 desugars Java 8 language features for API 10; Java 8 *library* APIs are not available
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lint {
+        // Catch accidental use of APIs newer than the camera's Android 2.3.7
+        error 'NewApi'
+        // Play Store / i18n checks don't apply to a sideloaded camera app
+        disable 'ExpiredTargetSdkVersion', 'MinSdkTooLow', 'OldTargetApi',
+                'PermissionImpliesUnsupportedChromeOsHardware', 'ExportedReceiver',
+                'MissingApplicationIcon', 'SetTextI18n',
+                // RECEIVER_EXPORTED flags only exist on API 33+
+                'UnspecifiedRegisterReceiverFlag'
+    }
+
+    applicationVariants.configureEach { variant ->
+        variant.outputs.configureEach {
+            outputFileName = "a5k-ui-${variant.buildType.name}-${variant.versionName}.apk"
+        }
+    }
+}
+
+// (a5000 UI 포크: 폰 뷰어 web 번들 제거 — 온-카메라 UI엔 불필요. ApiServer는 /api·/api/debug만 서빙.)
+
+dependencies {
+    def omVersion = 'f8df350'
+    implementation "com.github.ma1co.OpenMemories-Framework:framework:$omVersion"
+    compileOnly "com.github.ma1co.OpenMemories-Framework:stubs:$omVersion"
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
+}
+
+// Lint only checks our own sources; this also scans bundled libraries for APIs the camera lacks.
+android.applicationVariants.configureEach { variant ->
+    def checkTask = tasks.register("check${variant.name.capitalize()}ApiLevel", Exec) {
+        dependsOn variant.assembleProvider
+        def apk = variant.outputs.first().outputFile
+        commandLine 'python3', "${rootDir}/tools/check-api-level.py", apk, android.defaultConfig.minSdk
+    }
+    variant.assembleProvider.configure { finalizedBy checkTask }
+}

@@ -1,0 +1,22 @@
+# custom-binary-app (route-b a5kinproc.so) build outputs & scratch
+build/
+**/build/
+*.o
+*.a
+**/.gradle/
+**/jniLibs/
+
+# firmware/Android-derived sysroots & cross toolchains (re-obtain locally; not public)
+sysroot/
+sysroot-android/
+sysroot*/
+toolchain/
+toolchain-ndk/
+toolchain*/
+
+# experimental scratch
+sftest/RGLTEST
+sftest/rgltest.cpp
+modloader/
+# NOTE(audit): uicore baked assets from framework-res may be firmware-derived
+# uicore/**/gen/

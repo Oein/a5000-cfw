@@ -1,0 +1,5 @@
+# Third-party checkouts (own upstreams; re-clone). Ignore ALL except our scripts/.
+*
+!.gitignore
+!scripts/
+!scripts/**

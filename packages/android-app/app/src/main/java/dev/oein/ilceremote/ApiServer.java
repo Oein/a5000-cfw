@@ -1,0 +1,573 @@
+package dev.oein.ilceremote;
+
+import com.github.ma1co.openmemories.framework.DeviceInfo;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import fi.iki.elonen.NanoHTTPD;
+
+/** HTTP API for the viewer app. */
+public class ApiServer extends NanoHTTPD {
+    public static final int PORT = 8080;
+
+    private static final java.util.regex.Pattern PHOTO_PATH =
+            java.util.regex.Pattern.compile("^/api/photos/(\\d+)(?:/(thumb|micro|small|preview|full|raw))?$");
+    private static final java.util.regex.Pattern MOVIE_PATH =
+            java.util.regex.Pattern.compile("^/api/movies/(\\d+)/(thumb|file)$");
+
+    private final LiveView liveView;
+    private final PhotoLibrary photos;
+    private final CameraControl camera;
+    /** Debug: renders the camera's screen as PNG, given a live view JPEG (or null) for the background. */
+    public interface ScreenCapture {
+        byte[] capture(byte[] liveViewJpeg) throws Exception;
+    }
+
+    private ScreenCapture screenCapture;
+
+    /** 디버그: 스캔코드 키 주입(개발 중 원격 스크린샷/네비게이션용). */
+    public interface KeyInjector { void key(int scanCode); }
+    private KeyInjector keyInjector;
+    public void setKeyInjector(KeyInjector k) { this.keyInjector = k; }
+    private final MovieLibrary movies = new MovieLibrary();
+
+
+    public void setScreenCapture(ScreenCapture capture) {
+        screenCapture = capture;
+    }
+
+    /** Debug builds only: lets tools/dev-install.sh close the app cleanly without losing Wi-Fi/adb. */
+    private final Runnable debugExit;
+
+    public ApiServer(LiveView liveView, PhotoLibrary photos, CameraControl camera, Runnable debugExit) {
+        super(PORT);
+        this.liveView = liveView;
+        this.photos = photos;
+        this.camera = camera;
+        this.debugExit = debugExit;
+    }
+
+    private Object hwExporter;   // stillPlay 세션 유지용 JpegExporter(디버그)
+
+    /** HW 디코드 진단: 키/메서드/여러 호출방식을 시도해 결과를 텍스트로. */
+    private String hwDecodeDiag(java.util.Map<String, String> params) {
+        int folder = intParam(params, "folder", 0), file = intParam(params, "file", 0);
+        StringBuilder sb = new StringBuilder();
+        String key = null;
+        try { key = photos.hwIndexKey(folder, file); } catch (Throwable t) { sb.append("keyErr:").append(t).append("\n"); }
+        sb.append("key=").append(key).append("\n");
+        if ("1".equals(params.get("wait"))) sb.append("waitDb=").append(photos.waitUpdateDb()).append("\n");
+        if ("1".equals(params.get("exp"))) {   // JpegExporter 생성 → 내부 startAccess 로 stillPlay/SDCom 세션 열기 시도
+            try {
+                if (hwExporter == null) hwExporter = Class.forName("com.sony.scalar.graphics.JpegExporter").newInstance();
+                sb.append("exporter=open\n");
+            } catch (Throwable t) { sb.append("exporter=").append(root(t)).append("\n"); }
+        }
+        if ("1".equals(params.get("pause"))) { try { liveView.pausePreview(); sb.append("paused\n"); } catch (Throwable t) { sb.append("pauseErr\n"); } }
+        if ("1".equals(params.get("stop"))) { try { liveView.stop(); sb.append("camStopped(released)\n"); } catch (Throwable t) { sb.append("stopErr:").append(root(t)).append("\n"); } }
+        int type = intParam(params, "it", 3);     // imageType(기본 MAIN=3)
+        int n = intParam(params, "n", 1);          // 반복 횟수(반복 디코드 안전성 스트레스)
+        boolean enc = "1".equals(params.get("enc"));   // JpegExporter 인코딩까지
+        if (key == null) return sb.append("no key\n").toString();
+        try {
+            Class<?> f = Class.forName("com.sony.scalar.graphics.OptimizedImageFactory");
+            Class<?> oc = Class.forName("com.sony.scalar.graphics.OptimizedImageFactory$Options");
+            Class<?> dm = Class.forName("com.sony.scalar.hardware.DeviceMemory");
+            for (int i = 0; i < n; i++) {
+                Object img = null;
+                try {
+                    Object opt = oc.newInstance();
+                    oc.getField("imageType").setInt(opt, type);
+                    img = f.getMethod("decodeImage", String.class, oc).invoke(null, key, opt);
+                    sb.append("#").append(i).append(" ").append(desc(img));
+                    if (enc && img != null) sb.append(" jpeg=").append(encodeLen(img));
+                    sb.append("\n");
+                } catch (Throwable t) { sb.append("#").append(i).append(" EX ").append(root(t)).append("\n"); }
+                finally {
+                    if (img != null) try { dm.getMethod("release").invoke(img); } catch (Throwable ignore) {}   // 반드시 해제
+                }
+            }
+        } catch (Throwable t) { sb.append("factoryErr: ").append(root(t)).append("\n"); }
+        return sb.toString();
+    }
+
+    private static String desc(Object img) {
+        if (img == null) return "NULL";
+        try { return "OK " + img.getClass().getMethod("getWidth").invoke(img) + "x" + img.getClass().getMethod("getHeight").invoke(img); }
+        catch (Throwable t) { return "OK(non-img?)"; }
+    }
+
+    /** JpegExporter 로 OptimizedImage 를 JPEG 인코딩해 바이트 수 반환(인코딩 경로 안전성 확인용). */
+    private static String encodeLen(Object img) {
+        try {
+            Class<?> je = Class.forName("com.sony.scalar.graphics.JpegExporter");
+            Class<?> jo = Class.forName("com.sony.scalar.graphics.JpegExporter$Options");
+            Class<?> oi = Class.forName("com.sony.scalar.graphics.OptimizedImage");
+            Object exporter = je.newInstance();
+            Object opt = jo.newInstance();
+            java.io.InputStream in = (java.io.InputStream) je.getMethod("encode", oi, jo).invoke(exporter, img, opt);
+            try {
+                if (in == null) return "null";
+                int total = 0, r; byte[] buf = new byte[8192];
+                while ((r = in.read(buf)) > 0) total += r;
+                return String.valueOf(total);
+            } finally {
+                try { in.close(); } catch (Throwable ignore) {}
+                try { je.getMethod("release").invoke(exporter); } catch (Throwable ignore) {}
+            }
+        } catch (Throwable t) { return "EX:" + t.getClass().getSimpleName() + ":" + t.getMessage(); }
+    }
+
+    private static String root(Throwable t) {
+        Throwable c = (t instanceof java.lang.reflect.InvocationTargetException && t.getCause() != null) ? t.getCause() : t;
+        return c.getClass().getName() + ": " + c.getMessage();
+    }
+
+    @Override
+    public Response serve(IHTTPSession session) {
+        try {
+            String uri = session.getUri();
+            if ("/api/info".equals(uri)) {
+                return json(info());
+            }
+            if ("/api/camera".equals(uri)) {
+                if (session.getMethod() == Method.POST) {
+                    return json(camera.apply(new JSONObject(body(session))));
+                }
+                return json(camera.state());
+            }
+            if ("/api/camera/shutter".equals(uri) && session.getMethod() == Method.POST) {
+                return json(camera.shoot());
+            }
+            if ("/api/camera/movie".equals(uri) && session.getMethod() == Method.POST) {
+                JSONObject request = new JSONObject(body(session));
+                return json(camera.movie(request.optString("action", "toggle")));
+            }
+            if ("/api/camera/focus".equals(uri) && session.getMethod() == Method.POST) {
+                JSONObject request = new JSONObject(body(session));
+                return json(camera.focus(!"stop".equals(request.optString("action", "start"))));
+            }
+            if ("/api/camera/focusdrive".equals(uri) && session.getMethod() == Method.POST) {
+                JSONObject request = new JSONObject(body(session));
+                return json(camera.focusDrive(request.optString("direction"), request.optInt("speed", 0)));
+            }
+            if ("/api/camera/zoom".equals(uri) && session.getMethod() == Method.POST) {
+                JSONObject request = new JSONObject(body(session));
+                if (request.has("target")) {
+                    return json(camera.zoomTo(request.getDouble("target")));
+                }
+                return json(camera.zoom(request.optString("direction"), request.optInt("speed", 0)));
+            }
+            if ("/api/camera/magnify".equals(uri) && session.getMethod() == Method.POST) {
+                JSONObject request = new JSONObject(body(session));
+                return json(camera.magnify(request.optString("action"), request.optDouble("dx", 0),
+                        request.optDouble("dy", 0)));
+            }
+            if ("/api/camera/params".equals(uri)) {
+                return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, camera.rawParameters());
+            }
+            if ("/api/photos".equals(uri)) {
+                java.util.Map<String, String> params = session.getParms();
+                int offset = Math.max(0, intParam(params, "offset", 0));
+                int limit = Math.max(1, Math.min(500, intParam(params, "limit", 100)));
+                return json(photos.list(offset, limit));
+            }
+            if ("/api/photos/delete".equals(uri) && session.getMethod() == Method.POST) {
+                return json(deletePhotos(new JSONObject(body(session)).getJSONArray("ids")));
+            }
+            java.util.regex.Matcher photo = PHOTO_PATH.matcher(uri);
+            if (photo.matches()) {
+                return photo(Long.parseLong(photo.group(1)), photo.group(2));
+            }
+            if ("/api/movies".equals(uri)) {
+                java.util.Map<String, String> params = session.getParms();
+                int offset = Math.max(0, intParam(params, "offset", 0));
+                int limit = Math.max(1, Math.min(500, intParam(params, "limit", 100)));
+                return json(movies.list(offset, limit));
+            }
+            java.util.regex.Matcher movie = MOVIE_PATH.matcher(uri);
+            if (movie.matches()) {
+                return movie(Long.parseLong(movie.group(1)), movie.group(2), session);
+            }
+            if ("/api/liveview".equals(uri)) {
+                return liveViewStream();
+            }
+            if ("/api/liveview.jpg".equals(uri)) {
+                return liveViewFrame();
+            }
+            if (uri.startsWith("/api/debug/") && BuildConfig.DEBUG) {
+                return debug(uri, session);
+            }
+            if (!uri.startsWith("/api/") && webAssets != null) {
+                return webFile(uri, session);
+            }
+            return newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not found: " + uri);
+        } catch (IllegalArgumentException e) {
+            return newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, e.toString());
+        } catch (Exception e) {
+            Logger.error("API " + session.getUri() + " failed", e);
+            return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, e.toString());
+        }
+    }
+
+    // --- web app -----------------------------------------------------------------------------------
+    // The phone app's features as a web app (assets/web), for any browser; "/" is its page.
+
+    private android.content.res.AssetManager webAssets;
+
+    public void setWebAssets(android.content.res.AssetManager assets) {
+        webAssets = assets;
+    }
+
+    /** Files only change with the app, so its version is their ETag. */
+    private static final String WEB_ETAG = "\"" + BuildConfig.VERSION_CODE + "\"";
+
+    private Response webFile(String uri, IHTTPSession session) {
+        String path = "/".equals(uri) ? "index.html" : uri.substring(1);
+        if (path.contains("..")) {
+            return notFound();
+        }
+        if (WEB_ETAG.equals(session.getHeaders().get("if-none-match"))) {
+            Response unchanged = newFixedLengthResponse(Response.Status.NOT_MODIFIED, MIME_PLAINTEXT, "");
+            unchanged.addHeader("ETag", WEB_ETAG);
+            return unchanged;
+        }
+        // The build stores a gzipped copy of the text files: send that when the browser takes it,
+        // which saves the camera both the bytes over its slow Wi-Fi and compressing them each time
+        String encodings = session.getHeaders().get("accept-encoding");
+        boolean gzip = false;
+        byte[] data = null;
+        if (encodings != null && encodings.contains("gzip")) {
+            data = readAsset("web/" + path + ".gzip");
+            gzip = data != null;
+        }
+        if (data == null) {
+            data = readAsset("web/" + path);
+        }
+        if (data == null) {
+            return notFound();
+        }
+        Response response = newFixedLengthResponse(Response.Status.OK, webType(path),
+                new java.io.ByteArrayInputStream(data), data.length);
+        if (gzip) {
+            response.addHeader("Content-Encoding", "gzip"); // see useGzipWhenAccepted
+        }
+        response.addHeader("Vary", "Accept-Encoding");
+        response.addHeader("ETag", WEB_ETAG);
+        response.addHeader("Cache-Control", "no-cache"); // revalidate: a 304 costs next to nothing
+        return response;
+    }
+
+    /** NanoHTTPD gzips text responses itself: not the ones that already are. */
+    @Override
+    protected boolean useGzipWhenAccepted(Response r) {
+        return r.getHeader("Content-Encoding") == null && super.useGzipWhenAccepted(r);
+    }
+
+    /** The asset's bytes, or null if there's no such file. */
+    private byte[] readAsset(String name) {
+        try {
+            java.io.InputStream in = webAssets.open(name);
+            try {
+                java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                byte[] buffer = new byte[8192];
+                int n;
+                while ((n = in.read(buffer)) > 0) {
+                    out.write(buffer, 0, n);
+                }
+                return out.toByteArray();
+            } finally {
+                in.close();
+            }
+        } catch (java.io.IOException e) {
+            return null;
+        }
+    }
+
+    private static String webType(String path) {
+        if (path.endsWith(".html")) return "text/html; charset=utf-8";
+        if (path.endsWith(".js")) return "application/javascript; charset=utf-8";
+        if (path.endsWith(".css")) return "text/css; charset=utf-8";
+        if (path.endsWith(".webmanifest")) return "application/manifest+json";
+        if (path.endsWith(".png")) return "image/png";
+        if (path.endsWith(".svg")) return "image/svg+xml";
+        if (path.endsWith(".ttf")) return "font/ttf";
+        return "application/octet-stream";
+    }
+
+    private Response debug(String uri, IHTTPSession session) throws InterruptedException {
+        java.util.Map<String, String> params = session.getParms();
+        if ("/api/debug/key".equals(uri) && keyInjector != null) {
+            int code = intParam(session.getParms(), "code", 0);
+            keyInjector.key(code);
+            return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, "key " + code + "\n");
+        }
+        if ("/api/debug/hwdecode".equals(uri)) {
+            return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, hwDecodeDiag(params));
+        }
+        if ("/api/debug/exit".equals(uri) && debugExit != null) {
+            debugExit.run();
+            return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, "Exiting");
+        }
+        if ("/api/debug/stats".equals(uri)) {
+            return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, liveView.stats() + "\n");
+        }
+        if ("/api/debug/liveview".equals(uri)) {
+            String result = liveView.reconfigure(intParam(params, "w", 0), intParam(params, "h", 0),
+                    intParam(params, "rate", -1), intParam(params, "interval", 0));
+            return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, result + "\n");
+        }
+        if ("/api/debug/screenshot".equals(uri) && screenCapture != null) {
+            byte[] background = null;
+            if (liveView.isRunning()) {
+                liveView.addClient();
+                try {
+                    LiveView.Frame frame = liveView.awaitFrame(0, 3000);
+                    background = frame == null ? null : frame.jpeg;
+                } finally {
+                    liveView.removeClient();
+                }
+            }
+            byte[] png;
+            try {
+                png = screenCapture.capture(background);
+            } catch (Exception e) {
+                throw new IllegalStateException("Screen capture failed", e);
+            }
+            return newFixedLengthResponse(Response.Status.OK, "image/png", new java.io.ByteArrayInputStream(png), png.length);
+        }
+        if ("/api/debug/file".equals(uri)) {
+            // Download any file the app can read, e.g. /system/app/*.odex for reverse engineering
+            java.io.File file = new java.io.File(String.valueOf(params.get("path")));
+            if (!file.isFile() || !file.canRead()) {
+                return notFound();
+            }
+            try {
+                return newFixedLengthResponse(Response.Status.OK, "application/octet-stream",
+                        new java.io.FileInputStream(file), file.length());
+            } catch (java.io.FileNotFoundException e) {
+                return notFound();
+            }
+        }
+        if ("/api/debug/resources".equals(uri)) {
+            return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT,
+                    SystemResources.list(intParam(params, "from", 0x01080000), intParam(params, "count", 0x1000)));
+        }
+        if ("/api/debug/drawable".equals(uri)) {
+            byte[] png = SystemResources.renderPng(intParam(params, "id", 0), intParam(params, "state", 0));
+            return png == null ? notFound() : newFixedLengthResponse(Response.Status.OK, "image/png",
+                    new java.io.ByteArrayInputStream(png), png.length);
+        }
+        if ("/api/debug/beep".equals(uri)) {
+            // Try a beep method (tone|track|sony); set=1 also makes it the one movies use
+            String method = params.get("method") != null ? params.get("method") : Beeper.getMethod();
+            if ("1".equals(params.get("set"))) {
+                Beeper.setMethod(method);
+            }
+            Beeper.play(method, intParam(params, "count", 1));
+            return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, "Beep " + method + "\n");
+        }
+        if ("/api/debug/blob".equals(uri)) {
+            // Raw throughput test: stream `size` zero bytes
+            int size = intParam(params, "size", 1000000);
+            return newFixedLengthResponse(Response.Status.OK, "application/octet-stream",
+                    new java.io.ByteArrayInputStream(new byte[size]), size);
+        }
+        return newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not found: " + uri);
+    }
+
+    private static int intParam(java.util.Map<String, String> params, String name, int fallback) {
+        try {
+            String value = params.get(name);
+            if (value == null) {
+                return fallback;
+            }
+            return value.startsWith("0x") ? (int) Long.parseLong(value.substring(2), 16) : Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    private Response photo(long id, String kind) throws JSONException, java.io.IOException {
+        if (kind == null) {
+            JSONObject details = photos.details(id);
+            return details == null ? notFound() : json(details);
+        }
+        Response response;
+        if ("full".equals(kind) || "raw".equals(kind)) {
+            java.io.File file = photos.file(id, "raw".equals(kind) ? "ARW" : "JPG");
+            if (file == null) {
+                return notFound();
+            }
+            response = newFixedLengthResponse(Response.Status.OK,
+                    "raw".equals(kind) ? "image/x-sony-arw" : "image/jpeg",
+                    new java.io.FileInputStream(file), file.length());
+            response.addHeader("Content-Disposition", "inline; filename=\"" + file.getName() + "\"");
+        } else {
+            byte[] jpeg = "thumb".equals(kind) ? photos.thumbnail(id)
+                    : "micro".equals(kind) ? photos.micro(id)
+                    : "small".equals(kind) ? photos.small(id)
+                    : photos.preview(id);
+            if (jpeg == null) {
+                return notFound();
+            }
+            response = newFixedLengthResponse(Response.Status.OK, "image/jpeg",
+                    new java.io.ByteArrayInputStream(jpeg), jpeg.length);
+        }
+        // A photo's content never changes for a given id
+        response.addHeader("Cache-Control", "max-age=86400");
+        response.addHeader("Access-Control-Allow-Origin", "*");
+        return response;
+    }
+
+    /** {ids: [...]} -> {deleted: [...], failed: [...]}. */
+    private JSONObject deletePhotos(org.json.JSONArray ids) throws JSONException {
+        org.json.JSONArray deleted = new org.json.JSONArray();
+        org.json.JSONArray failed = new org.json.JSONArray();
+        for (int i = 0; i < ids.length(); i++) {
+            long id = ids.getLong(i);
+            (photos.delete(id) ? deleted : failed).put(id);
+        }
+        Logger.info("Deleted " + deleted.length() + " photos, " + failed.length() + " failed");
+        return new JSONObject().put("deleted", deleted).put("failed", failed);
+    }
+
+    /**
+     * A movie's thumbnail, or the movie itself with byte ranges, so a <video> plays and seeks it
+     * while it streams instead of downloading it first.
+     */
+    private Response movie(long id, String kind, IHTTPSession session) throws java.io.IOException {
+        java.io.File file = "thumb".equals(kind) ? movies.thumbnail(id) : movies.file(id);
+        if (file == null) {
+            return notFound();
+        }
+        Response response;
+        if ("thumb".equals(kind)) {
+            response = newFixedLengthResponse(Response.Status.OK, "image/jpeg",
+                    new java.io.FileInputStream(file), file.length());
+        } else {
+            response = fileRange(file, "video/mp4", session.getHeaders().get("range"));
+            response.addHeader("Content-Disposition", "inline; filename=\"" + file.getName() + "\"");
+        }
+        response.addHeader("Cache-Control", "max-age=86400");
+        response.addHeader("Access-Control-Allow-Origin", "*");
+        return response;
+    }
+
+    /** The whole file, or the one range of "bytes=start-[end]" (what browsers send). */
+    private static Response fileRange(java.io.File file, String mime, String range) throws java.io.IOException {
+        long length = file.length();
+        long start = 0;
+        long end = length - 1;
+        boolean partial = false;
+        if (range != null && range.startsWith("bytes=") && range.indexOf(',') < 0) {
+            String spec = range.substring(6).trim();
+            int dash = spec.indexOf('-');
+            try {
+                if (dash == 0) {
+                    // Suffix: the last n bytes
+                    start = Math.max(0, length - Long.parseLong(spec.substring(1)));
+                } else if (dash > 0) {
+                    start = Long.parseLong(spec.substring(0, dash));
+                    if (dash < spec.length() - 1) {
+                        end = Math.min(end, Long.parseLong(spec.substring(dash + 1)));
+                    }
+                }
+                partial = true;
+            } catch (NumberFormatException e) {
+                partial = false;
+            }
+            if (partial && (start >= length || start > end)) {
+                Response response = newFixedLengthResponse(Response.Status.RANGE_NOT_SATISFIABLE, MIME_PLAINTEXT, "");
+                response.addHeader("Content-Range", "bytes */" + length);
+                return response;
+            }
+        }
+        java.io.FileInputStream in = new java.io.FileInputStream(file);
+        if (!partial) {
+            Response response = newFixedLengthResponse(Response.Status.OK, mime, in, length);
+            response.addHeader("Accept-Ranges", "bytes");
+            return response;
+        }
+        long skipped = 0;
+        while (skipped < start) {
+            long n = in.skip(start - skipped);
+            if (n <= 0) {
+                in.close();
+                throw new java.io.IOException("Cannot seek " + file);
+            }
+            skipped += n;
+        }
+        Response response = newFixedLengthResponse(Response.Status.PARTIAL_CONTENT, mime, in, end - start + 1);
+        response.addHeader("Accept-Ranges", "bytes");
+        response.addHeader("Content-Range", "bytes " + start + "-" + end + "/" + length);
+        return response;
+    }
+
+    /** Request body of a POST with a JSON (non-form) content type. */
+    private static String body(IHTTPSession session) throws java.io.IOException, ResponseException {
+        java.util.Map<String, String> files = new java.util.HashMap<String, String>();
+        session.parseBody(files);
+        String body = files.get("postData");
+        return body == null ? "{}" : body;
+    }
+
+    private static Response notFound() {
+        return newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not found");
+    }
+
+    private Response liveViewStream() {
+        if (!liveView.isRunning()) {
+            return unavailable();
+        }
+        Response response = newChunkedResponse(Response.Status.OK, MjpegStream.CONTENT_TYPE, new MjpegStream(liveView));
+        response.addHeader("Cache-Control", "no-cache, no-store");
+        response.addHeader("Access-Control-Allow-Origin", "*");
+        return response;
+    }
+
+    private Response liveViewFrame() throws InterruptedException {
+        if (!liveView.isRunning()) {
+            return unavailable();
+        }
+        liveView.addClient();
+        LiveView.Frame frame;
+        try {
+            frame = liveView.awaitFrame(0, 3000);
+        } finally {
+            liveView.removeClient();
+        }
+        if (frame == null) {
+            return unavailable();
+        }
+        Response response = newFixedLengthResponse(Response.Status.OK, "image/jpeg",
+                new java.io.ByteArrayInputStream(frame.jpeg), frame.jpeg.length);
+        response.addHeader("Cache-Control", "no-cache, no-store");
+        response.addHeader("Access-Control-Allow-Origin", "*");
+        return response;
+    }
+
+    private static Response unavailable() {
+        return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, MIME_PLAINTEXT, "Live view not running");
+    }
+
+    private static JSONObject info() throws JSONException {
+        DeviceInfo device = DeviceInfo.getInstance();
+        JSONObject json = new JSONObject();
+        json.put("app", "ilce-remote");
+        json.put("appVersion", BuildConfig.VERSION_NAME);
+        json.put("model", device.getModel());
+        json.put("productCode", device.getProductCode());
+        json.put("firmware", device.getFirmwareVersion());
+        json.put("pmcaApi", device.getApiVersion());
+        json.put("android", device.getAndroidVersion());
+        return json;
+    }
+
+    private static Response json(JSONObject json) {
+        Response response = newFixedLengthResponse(Response.Status.OK, "application/json", json.toString());
+        response.addHeader("Access-Control-Allow-Origin", "*");
+        return response;
+    }
+}

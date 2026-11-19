@@ -1,0 +1,22 @@
+# ===========================================================================
+# ROOT .gitignore — global/OS only + the one cross-cutting SECURITY boundary.
+# Each package keeps its own .gitignore for build outputs etc.
+# ===========================================================================
+
+# OS / editor / session
+.DS_Store
+.claude/
+.venv/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# ---------------------------------------------------------------------------
+# SECURITY BOUNDARY (defense-in-depth; packages/data also self-ignores):
+# Sony firmware IP, decompiler output, NAND/device backups, device dumps,
+# firmware-derived assets, personal/device data — NEVER committed (repo is public).
+# Only packages/data/README.md (+ its .gitignore) is tracked; all contents ignored.
+# ---------------------------------------------------------------------------
+packages/data/*
+!packages/data/README.md
+!packages/data/.gitignore

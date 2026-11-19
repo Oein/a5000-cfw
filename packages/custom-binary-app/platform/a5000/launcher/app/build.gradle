@@ -1,0 +1,54 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'dev.oein.a5knative'
+    compileSdk 35
+    buildToolsVersion '35.0.0'
+
+    defaultConfig {
+        applicationId 'dev.oein.a5knative'
+        // ILCE-5000 runs Android 2.3.7 (API 10) — same as Track A.
+        minSdk 10
+        //noinspection ExpiredTargetSdkVersion
+        targetSdk 10
+        versionCode 1
+        versionName 'm0'
+        ndk { abiFilters 'armeabi' }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.debug   // PMCA accepts debug-signed APKs
+        }
+    }
+
+    // The native UI binary and ctl client are prebuilt (a5k-ndk docker) and dropped
+    // into src/main/jniLibs/armeabi as lib*.so so Android extracts them (exec bit kept)
+    // to nativeLibraryDir. See launcher/README.md and M0_STATUS.md.
+    sourceSets.main {
+        jniLibs.srcDirs = ['src/main/jniLibs']
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lint {
+        // The API10 gate is tools/check-api-level.py (run after assemble); lint-vital
+        // pulls an uncached artifact, so skip it for release builds.
+        checkReleaseBuilds false
+        error 'NewApi'
+        disable 'ExpiredTargetSdkVersion', 'MinSdkTooLow', 'OldTargetApi',
+                'MissingApplicationIcon', 'SetTextI18n', 'UnspecifiedRegisterReceiverFlag'
+    }
+
+    applicationVariants.configureEach { variant ->
+        variant.outputs.configureEach {
+            outputFileName = "a5kui-launcher-${variant.buildType.name}.apk"
+        }
+    }
+}

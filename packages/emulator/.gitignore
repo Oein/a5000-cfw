@@ -1,0 +1,28 @@
+# nested QEMU repo (branch sony-a5000); tracked here only as patches/
+/qemu/
+# firmware-derived / generated binaries — never commit
+/re/vmlinux.elf
+/provision/prov.cpio
+/provision/a5kcopy
+*.nand
+*.img
+__pycache__/
+*.pyc
+.DS_Store
+/state/
+/re/ida_stor/
+# --- never publish (Sony copyright / the owner's device data) ---
+# initramfs bundles Sony kernel modules + firmware userland; rebuilt by run.sh
+/provision/*.cpio
+# Hex-Rays output of Sony binaries
+/re/ida_stor/
+# real-camera logs; NAND dump of the owner's camera; data generated from the updater (tools/mkdata.py)
+/re/real_kernel_log.txt
+/data/*.bin
+/data/*.BIN
+/data/wbi/
+# official updater (Sony firmware), unpacked locally
+/firmware/
+# build products
+/tools/*.dylib
+/tools/*.so
