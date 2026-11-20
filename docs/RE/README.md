@@ -27,6 +27,8 @@ a5000의 순정 UI를 더 나은 커스텀 UI로 교체하되 모든 기능을 �
 | [movie](movie/README.md) | **녹화(0001)·SteadyShot/줌(0002)** — Movie팩토리 0x3000/02/03, H.264=SA DSP ZIMA, 바디IS 없음, 줌 3종 ch51 | 전부 패스스루(SDCom 토글+ch53 오버레이) |
 | [connectivity](connectivity/README.md) | **Wi-Fi·NFC·USB·앱(0001)** — 리모트=orb-server WebAPI :10000(Camera Remote API), DLNA/전송/MTP/NFC=im.elf 내부 | 리모트는 route-b 직접 구동 가능, 나머지 순정 트리거 |
 | [scene](scene/README.md) | **장면·자동지능(0001)** — iAuto/SCN(param 263/select), 얼굴검출(303/304·0x1015), 스마일·소프트스킨(355)·오토프레이밍 | set 가능, 인식·검출·프레임=엔진 passthrough |
+| [flash](flash/README.md) | **플래시 모드/발광(0001)** — 모드 param 264, 보정 278, 적목 277; 팝업/충전=엔진(충전 이벤트 0x1352) | set ✅, 발광=촬영 passthrough |
+| [system](system/README.md) | **유지보수/기타(0001)** — 데모/버전/인증로고/미디어정보/DB복원; 센서클리닝=a5000 미존재 | 전부 벽돌0(읽기뷰/안전토글), 나머지 시스템은 menu/backup/settings |
 | [misc](misc/README.md) | RE 범위 원장, 트랙 B 임계 경로, 기기 워크플로, UI 리소스, 운영 제약 | |
 
 ## 읽는 순서 제안
