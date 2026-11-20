@@ -25,6 +25,8 @@ a5000의 순정 UI를 더 나은 커스텀 UI로 교체하되 모든 기능을 �
 | [shooting](shooting/README.md) | **드라이브/릴리즈(0001)·룩/화질/WB(0002)** — 제어면 param 256~388, set=`CameraSetParameters 0x1003` | 순정 전기능 켜기 OK, 새 룩/이펙트 주입 불가(Artfilter/ColorMode 독점) |
 | [focus](focus/README.md) | **초점 시스템(0001)** — AF모드(CVPDM g13)·영역(g187)·스팟(g188)·트리거(S1/0x1006)·확대·MF어시스트·피킹 | 데이터면=엔진 소유, 모드/영역은 route-b 배선·검증됨 |
 | [movie](movie/README.md) | **녹화(0001)·SteadyShot/줌(0002)** — Movie팩토리 0x3000/02/03, H.264=SA DSP ZIMA, 바디IS 없음, 줌 3종 ch51 | 전부 패스스루(SDCom 토글+ch53 오버레이) |
+| [connectivity](connectivity/README.md) | **Wi-Fi·NFC·USB·앱(0001)** — 리모트=orb-server WebAPI :10000(Camera Remote API), DLNA/전송/MTP/NFC=im.elf 내부 | 리모트는 route-b 직접 구동 가능, 나머지 순정 트리거 |
+| [scene](scene/README.md) | **장면·자동지능(0001)** — iAuto/SCN(param 263/select), 얼굴검출(303/304·0x1015), 스마일·소프트스킨(355)·오토프레이밍 | set 가능, 인식·검출·프레임=엔진 passthrough |
 | [misc](misc/README.md) | RE 범위 원장, 트랙 B 임계 경로, 기기 워크플로, UI 리소스, 운영 제약 | |
 
 ## 읽는 순서 제안
