@@ -438,13 +438,31 @@ the Backup read result on SS (AI_WORKFLOW §1.5). Both are device-coherence work
 far:** kernel resume, the *entire* device/UDIF resume, and userland thaw all succeed; the UI is blocked by this single
 settings-read assert (i.e. it gets right up to the UI).
 
+**Probe: is the UI reachable behind that one read?** A **one-off local experiment (NOT committed)** patched the
+`initialize_setting` call site in the resumed snapshot so `blx Backup_nread; cmp r0,#4` becomes
+`movs r0,#0; str r0,[r1]; cmp r0,r0` (stores value 0, passes the assert), located by the preceding instruction
+signature (no snapshot-specific address hardcoded; applied at PA 0x8BA9DFDA). The patch itself is not shipped (it
+embeds a firmware opcode signature); only this finding is recorded. Result: `im.elf` **no longer
+aborts** (klog shows no exception, just `Restarting tasks ... done.`), **but the shooting UI still does not render — the
+panel stays black.** The whole system goes **quiescent**: CPU0 sits in `cpu_v7_do_idle+0x8` (wfi, via `default_idle`),
+no thread runnable, i.e. every `im.elf` thread is blocked in a kernel wait. So the next wall is **not** another assert
+but a **silent engine/display-coherence deadlock**: after the settings init the render pipeline (Rigel/VDF OSD present)
+blocks on a resume event the factory snapshot expects and the emulator's device models do not regenerate — no single
+faulting PC/offset (a missing-event deadlock). Candidate (not chased, marked as such): `RE_UI_BRINGUP.md` §7 gate C
+(VDF must answer each OSD send with MSGID_PIN_SEND_COMP or the UI thread blocks on the second eglSwapBuffers) or an
+av-cam "camera ready"/resume handshake. **Conclusion: full warm-SS UI is not reachable behind just the one settings
+read** — resuming a *foreign* real-camera snapshot needs the engine resume handshakes modelled, which is likely the
+emulator's ceiling here without the real device. Per the bounded-probe instruction, this first next wall is
+characterised and the chase stops.
+
 **Verdict for the autostart question (`docs/RE/boot/0005` §6).** On *any* warm resume (HOT or SS) `/sbin/init` does
 not re-run — observed here: on SS the ttyAM1 shell never appears, i.e. the snapshot's factory cmdline (`console=ttynull`)
 and already-run init stand; `Restarting tasks` thaws the existing processes. So `/setting` `dmode`+`env.txt` LD_PRELOAD
 (`check_mode_file`/`set_oreore_env`) is **not** applied on a warm power-on; it triggers only on a cold boot. On a
 warm-always camera, route-b injection into the already-running im.elf — not the init LD_PRELOAD path — is what survives.
 
-**Files changed:** `qemu-overlay/hw/arm/sony_a5000.c` (the `wbi-snapshot` option, `a5k_ssboot_load` with the default
+**Files (committed):** `qemu-overlay/hw/arm/sony_a5000.c` (the `wbi-snapshot` option, `a5k_ssboot_load` with the default
 NAND/MUMIN hand-off auto-load + `A5K_SS_LOWMEM` override, the SS branch of `a5k_boot_reset`), `run.sh`
-(`A5K_WBI_SNAPSHOT`, `A5K_SS_LOWMEM` env). Runtime device-private artifacts (never committed): `<wbi-snapshot>/ram.bin`,
-`map.tsv`, `nand_lowmem.bin`.
+(`A5K_WBI_SNAPSHOT`, `A5K_SS_LOWMEM` env). Runtime device-private artifacts (never committed):
+`<wbi-snapshot>/ram.bin`, `map.tsv`, `nand_lowmem.bin`. The Backup-assert-bypass probe above was a **one-off local
+experiment, not committed** (it embeds a firmware opcode signature; the finding is kept, the hook is not).
