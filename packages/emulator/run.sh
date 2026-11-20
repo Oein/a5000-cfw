@@ -31,9 +31,11 @@
 #                            private) into DDR on a cold power-on and resume
 #                            it (~1 s) like the real camera, instead of a full
 #                            cold boot. docs/RE_WARM_RESUME.md
-#      A5K_SS_LOWMEM=<file>  (experiment) raw 0x80000000 NAND/MUMIN hand-off
-#                            captured from a cold boot, injected on the SS
-#                            path so mumindrv can resume (see RE_WARM_RESUME)
+#      A5K_SS_LOWMEM=<file>  override for the SS NAND/MUMIN hand-off at
+#                            0x80000000 (default: <A5K_WBI_SNAPSHOT>/nand_lowmem
+#                            .bin, captured once from a cold boot with
+#                            'pmemsave 0x80000000 0x21000 ...'); needed for
+#                            mumindrv to resume on SS (see RE_WARM_RESUME.md)
 E="$(cd "$(dirname "$0")" && pwd)"
 R="$(dirname "$E")"   # optional parent checkout (firmware/, backup/ next to this repo)
 # unpacked official updater: $A5K_FW, else ./firmware, else ../firmware

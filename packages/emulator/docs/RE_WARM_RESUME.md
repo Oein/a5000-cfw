@@ -404,23 +404,39 @@ no `stage 1 (loader)`); `WARMBOOT` (the snapshot-resume branch: state 4, `pm_mem
 `Restarting tasks ... done.` — in ~88 ms, with no `Linux version` banner (resume-in-place, not a cold boot). printk
 timestamps restart at 0 as on HOT.
 
-**Blocker 1 — MUMIN FTL hand-off (solved, needs a board stand-in).** The snapshot omits 0x80000000..0x80021000
-(memrsv 0x28000@0x80000000 = the MUMIN hand-off). A cold boot's stage-1 `nand.ko boot_mode=1` rebuilds it; SS skips
-stage 1, so `mumindrv` resume fails (`mumin_register_devctrl_info ... stat 0`) and the UDIF resume chain aborts there,
-before liro/display — black screen. **Experiment** `A5K_SS_LOWMEM=<file>` injects a raw 0x80000000 image captured from
-a cold boot (`mon.py <mon> 'pmemsave 0x80000000 0x21000 "f.bin"'`; magic `iMuM` = MUMIN, 132 KiB) on the SS path:
-mumindrv then resumes cleanly and the whole UDIF chain (b-252, utm, uipc, utimer, backup) completes. So this is a
-device-coherence gap, not a resume defect. **Fix direction:** the board should stand in for the bootloader's NAND
-hand-off on SS (reproduce stage-1's `iMuM` hand-off, or do a minimal NAND re-init before the resume), as it already
+**Blocker 1 — MUMIN FTL hand-off (FIXED, now the default).** The snapshot omits 0x80000000..0x80021000
+(memrsv 0x28000@0x80000000 = the MUMIN hand-off). A cold boot's stage-1 `nand.ko boot_mode=1` rebuilds it from the
+NAND; SS skips stage 1, so `mumindrv` resume fails (`mumin_register_devctrl_info ... stat 0`) and the UDIF resume chain
+aborts there, before liro/display — black screen. The region is NAND-content-dependent (block translation tables,
+header magic `iMuM`), not a small static struct, so it is not reproduced in C (that would mean reimplementing the MUMIN
+FTL). Like ram.bin/map.tsv it is supplied as a **device-private runtime artifact** next to the snapshot,
+`<wbi-snapshot>/nand_lowmem.bin` (bytes never committed), captured once from a cold boot
+(`mon.py <mon> 'pmemsave 0x80000000 0x21000 "<dir>/nand_lowmem.bin"'`). `a5k_ssboot_load` auto-loads it by default
+(`A5K_SS_LOWMEM` overrides the path; missing → a warning, the UI will not come up). With it, `mumindrv` resumes cleanly
+and the **whole UDIF chain completes** (b-252, utm, uipc, utimer, backup; `PM: resume of devices complete`,
+`Restarting tasks ... done.`). This is the board standing in for the bootloader's NAND hand-off on SS, as it already
 does for the ARM7 SRAM dev-info at PA 0x3F00.
 
-**Blocker 2 — im.elf userland coherence (open, the real blocker).** With Blocker 1's hand-off injected, the device
-resume completes but the factory snapshot's `im.elf` (pid 148) then faults with a null jump (PC 0x0428A726, r0 = 0,
-address 0) and enters the exception monitor — still a black screen. The factory snapshot assumes the *exact* state of
-the real engine (Rigel/VDF, av-cam sub-core, sensor/ISP, SA-DSP); the emulator's engine models do not reproduce it, so
-some handle/object lookup returns null. This is the same class as the HOT w1..w3 av-cam fatal (§3.3), but deeper: HOT
-resumes the emulator's *own* cold-boot DDR (consistent with the models), while SS resumes a *foreign* real-camera
-image. Next step: identify the lookup just before 0x0428A726 (an engine/driver state read) and correct that model.
+**Blocker 2 — a resume-time settings read (open; the wall, precisely located).** With Blocker 1 fixed the device
+resume completes and `im.elf` thaws, but just before the UI it **aborts**: `dmpNative::SystemImpl::initialize_setting()`
+(libObj.so+0x5DAFCx) calls `Backup_nread(bkid=0x01700000, &this->setting, 4)` (libObj+0x5DAFDA), the return count is
+not 4, and `assert(bret == sizeof(this->setting))` (SystemImpl.cpp:156) fires → `abort`/`raise(SIGABRT)` (libc, which
+the Sony em labels "vector exception (0x000)"). Resolved live with a gdb hbreak at `__assert_fail` (0x04294bcc); the
+assertion string/file/line and the `Backup_nread(0x01700000,4)` call were read from memory and the on-disk libObj.so.
+Backup prop **0x01700000** (4 B, value 0) is a known UI-bringup read (`RE_UI_BRINGUP.md` §7 item 8: "__assert_fail if
+the read size ≠ 4"). The emulator serves Backup props from the **guest `backup.ko`'s RAM copy** of Backup.bin, not a
+board hook; on a **cold boot this read returns 4** (the UI comes up), and only on SS resume is it short. SS sets
+`ssboot_stat = 4` + `WARMBOOT` + `ssboot_setmode`, signalling userland a snapshot boot, which runs this (re-)init at a
+point where Backup serving does not return 4 — most likely (a) `backup.ko`'s post-resume Backup.bin read is short
+because SS NAND/FTL reads are not fully coherent (Blocker 1's hand-off let `mumindrv` *resume*, but the foreign
+snapshot's FTL state vs the emulator NAND model may not agree down to reads), or (b) a thaw-order race (the dmpNative
+thread runs before `backup.ko` serves). The stripped, frame-pointer-less stack blocks static attribution of the caller
+chain, so pinning (a) vs (b) is device-only. **Minimal stub to get past it:** ensure `Backup_nread(0x01700000)` (and
+the sibling dmpNative setting props) return 4 B (value 0) on the SS path — either by making `backup.ko`'s resume serve
+from the snapshot's RAM copy (NAND/FTL read coherence = extending Blocker 1 to the read level), or an HLE that forces
+the Backup read result on SS (AI_WORKFLOW §1.5). Both are device-coherence work, not a resume-mechanism defect. **How
+far:** kernel resume, the *entire* device/UDIF resume, and userland thaw all succeed; the UI is blocked by this single
+settings-read assert (i.e. it gets right up to the UI).
 
 **Verdict for the autostart question (`docs/RE/boot/0005` §6).** On *any* warm resume (HOT or SS) `/sbin/init` does
 not re-run — observed here: on SS the ttyAM1 shell never appears, i.e. the snapshot's factory cmdline (`console=ttynull`)
@@ -428,5 +444,7 @@ and already-run init stand; `Restarting tasks` thaws the existing processes. So 
 (`check_mode_file`/`set_oreore_env`) is **not** applied on a warm power-on; it triggers only on a cold boot. On a
 warm-always camera, route-b injection into the already-running im.elf — not the init LD_PRELOAD path — is what survives.
 
-**Files changed:** `qemu-overlay/hw/arm/sony_a5000.c` (the `wbi-snapshot` option, `a5k_ssboot_load`, the SS branch of
-`a5k_boot_reset`, and the `A5K_SS_LOWMEM` experiment hook), `run.sh` (`A5K_WBI_SNAPSHOT`, `A5K_SS_LOWMEM` env).
+**Files changed:** `qemu-overlay/hw/arm/sony_a5000.c` (the `wbi-snapshot` option, `a5k_ssboot_load` with the default
+NAND/MUMIN hand-off auto-load + `A5K_SS_LOWMEM` override, the SS branch of `a5k_boot_reset`), `run.sh`
+(`A5K_WBI_SNAPSHOT`, `A5K_SS_LOWMEM` env). Runtime device-private artifacts (never committed): `<wbi-snapshot>/ram.bin`,
+`map.tsv`, `nand_lowmem.bin`.

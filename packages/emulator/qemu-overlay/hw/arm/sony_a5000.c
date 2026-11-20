@@ -1466,33 +1466,46 @@ static void a5k_ssboot_load(A5KMachineState *s)
 
     /*
      * The WBI snapshot deliberately omits the MUMIN FTL hand-off at
-     * 0x80000000..0x80021000 (memrsv 0x28000@0x80000000): on the real camera
-     * the bootloader does the NAND duties and leaves this region, and on a
-     * cold boot the emulator's stage-1 nand.ko (boot_mode=1) rebuilds it
-     * (docs/RE_REBOOT.md).  SS skips stage 1, so without it mumindrv_resume
-     * fails ("mumin_register_devctrl_info ... stat 0") and the UDIF resume
-     * chain aborts before liro/display.  EXPERIMENT (env A5K_SS_LOWMEM): a
-     * raw image of 0x80000000 captured from a cold boot, to confirm the gap
-     * and the fix direction (the board should stand in for the bootloader's
-     * NAND hand-off on SS, docs/RE_WARM_RESUME.md).  Loaded last so the
-     * snapshot's own 0x80021000 hand-off page is not disturbed.
+     * 0x80000000..0x80021000 (memrsv 0x28000@0x80000000).  On the real camera
+     * the bootloader does the NAND duties and leaves this region; on a cold
+     * boot the emulator's stage-1 nand.ko (boot_mode=1) rebuilds it from the
+     * NAND (docs/RE_REBOOT.md, header magic "iMuM").  SS skips stage 1, so
+     * without it mumindrv_resume fails ("mumin_register_devctrl_info ...
+     * stat 0") and the UDIF resume chain aborts before liro/display.
+     *
+     * The region is NAND-content-dependent (block translation tables), not a
+     * small static structure, so it is not reproduced in C (that would mean
+     * reimplementing the MUMIN FTL).  Like ram.bin/map.tsv it is supplied as a
+     * device-private runtime artifact next to the snapshot
+     * ("nand_lowmem.bin", bytes never committed), captured once from a cold
+     * boot (pmemsave 0x80000000 0x21000); A5K_SS_LOWMEM overrides the path.
+     * Loaded last so the snapshot's own 0x80021000 hand-off page is intact.
+     * This is the board standing in for the bootloader's NAND hand-off on SS.
      */
-    const char *low = getenv("A5K_SS_LOWMEM");
-    if (low && *low) {
-        g_autofree char *ldata = NULL;
-        gsize llen;
-        g_autoptr(GError) lerr = NULL;
-        if (!g_file_get_contents(low, &ldata, &llen, &lerr)) {
-            error_report("sony-a5000: A5K_SS_LOWMEM: %s", lerr->message);
-            exit(1);
-        }
+    const char *env = getenv("A5K_SS_LOWMEM");
+    g_autofree char *dflt = g_build_filename(s->wbi_snapshot, "nand_lowmem.bin",
+                                             NULL);
+    const char *low = (env && *env) ? env : dflt;
+    g_autofree char *ldata = NULL;
+    gsize llen;
+    g_autoptr(GError) lerr = NULL;
+
+    if (g_file_get_contents(low, &ldata, &llen, &lerr)) {
         if (llen > 0x21000) {
             llen = 0x21000;         /* do not cross into the snapshot page */
         }
         address_space_write(as, A5K_DDR_BASE, MEMTXATTRS_UNSPECIFIED, ldata,
                             llen);
-        info_report("sony-a5000: SS experiment: %zu B NAND hand-off written "
-                    "to 0x80000000 from %s", (size_t)llen, low);
+        info_report("sony-a5000: SS NAND/MUMIN hand-off: %zu B to 0x80000000 "
+                    "from %s", (size_t)llen, low);
+    } else if (env && *env) {
+        error_report("sony-a5000: A5K_SS_LOWMEM: %s", lerr->message);
+        exit(1);
+    } else {
+        warn_report("sony-a5000: SS NAND/MUMIN hand-off missing (%s): "
+                    "mumindrv will not resume and the UI will not come up; "
+                    "capture it once with 'pmemsave 0x80000000 0x21000 ...' "
+                    "from a cold boot (docs/RE_WARM_RESUME.md)", low);
     }
 }
 

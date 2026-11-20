@@ -10,8 +10,8 @@
 
 ## 열린 항목
 - (해소: [0005] §6) ~~warm 재개 하에서 dmode/env.txt 자동 실행이 적용되는가~~ → **warm(HOT·SS)에서는 적용 안 됨**(init 미실행); 콜드에서만 트리거, warm엔 route-b 주입
-- SS 경로 im.elf userland 정합성(엔진 상태) — [0005] §5
-- SS 경로 NAND/MUMIN 하드오프 보드 재현 — [0005] §5
+- SS 경로 im.elf 벽: `initialize_setting`의 `Backup_nread(0x01700000,4)`가 재개 시 ≠4 반환 → assert/abort; 최소 스텁 = SS 경로 Backup 서빙 정합(backup.ko 재개/NAND 읽기 레벨 또는 HLE) — [0005] §5 블로커2
+- SS NAND/MUMIN 하드오프: 현재 device-private 런타임 파일(`nand_lowmem.bin`) 자동 로드로 해결; 장차 보드가 FTL 하드오프 직접 재현 가능 — [0005] §2·블로커1
 - `touch /setting/updater/mode` 리허설(사용자 승인 필요)
 - 부트로더의 비-플래그 진입(키 홀드) 존재 여부
 - ud_wbi_drop 라이브 효과(위험, 미시도)
