@@ -23,6 +23,7 @@ a5000의 순정 UI를 더 나은 커스텀 UI로 교체하되 모든 기능을 �
 | [playback](playback/README.md) | **동영상 재생(0001)·RAW 갤러리 썸네일(0002)** — 재생영상=ch51(라이브뷰 평면), RAW는 매립 JPEG 디코드(재현상 아님) | 정지=우리 직접디코드(구현됨), 동영상=순정 트리거+ch53 오버레이 |
 | [network](network/README.md) | **AF→WiFi 끊김(0001)** — 의도적 아님, PREEMPT_RT 스케줄링 기아(Wi-Fi가 우선순위 맨 아래) | RAM-only 수리 가능(IRQ affinity·ksdioirqd 승격), 실기 계측 1회 필요 |
 | [shooting](shooting/README.md) | **드라이브/릴리즈(0001)·룩/화질/WB(0002)** — 제어면 param 256~388, set=`CameraSetParameters 0x1003` | 순정 전기능 켜기 OK, 새 룩/이펙트 주입 불가(Artfilter/ColorMode 독점) |
+| [focus](focus/README.md) | **초점 시스템(0001)** — AF모드(CVPDM g13)·영역(g187)·스팟(g188)·트리거(S1/0x1006)·확대·MF어시스트·피킹 | 데이터면=엔진 소유, 모드/영역은 route-b 배선·검증됨 |
 | [misc](misc/README.md) | RE 범위 원장, 트랙 B 임계 경로, 기기 워크플로, UI 리소스, 운영 제약 | |
 
 ## 읽는 순서 제안
