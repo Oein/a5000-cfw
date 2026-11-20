@@ -21,6 +21,7 @@ a5000의 순정 UI를 더 나은 커스텀 UI로 교체하되 모든 기능을 �
 | [persistence](persistence/README.md) | **cold-boot 생존 패치 타당성(0001)** — a5000 코드 서명 없음, LD_PRELOAD가 1순위 | 최고 벽돌위험 경로 조사(절차서 아님) |
 | [memory](memory/README.md) | **RAM 풋프린트/트림(0001)** — Linux 175.8MB, 회수가능 ~48MB, 진짜 위험=OOM시 im.elf가 먼저 죽음(oom_adj=0) | 우리 UI +9.8MB → ~3MB 감량 가능 |
 | [playback](playback/README.md) | **동영상 재생(0001)·RAW 갤러리 썸네일(0002)** — 재생영상=ch51(라이브뷰 평면), RAW는 매립 JPEG 디코드(재현상 아님) | 정지=우리 직접디코드(구현됨), 동영상=순정 트리거+ch53 오버레이 |
+| [network](network/README.md) | **AF→WiFi 끊김(0001)** — 의도적 아님, PREEMPT_RT 스케줄링 기아(Wi-Fi가 우선순위 맨 아래) | RAM-only 수리 가능(IRQ affinity·ksdioirqd 승격), 실기 계측 1회 필요 |
 | [misc](misc/README.md) | RE 범위 원장, 트랙 B 임계 경로, 기기 워크플로, UI 리소스, 운영 제약 | |
 
 ## 읽는 순서 제안
