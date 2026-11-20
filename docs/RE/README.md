@@ -17,7 +17,7 @@ a5000의 순정 UI를 더 나은 커스텀 UI로 교체하되 모든 기능을 �
 | [menu](menu/README.md) | 노드 트리(root 0x4822D4), 실측 106항목, 액션/앱 실행 경로, 구현 맵 | 7번째 탭/항목 주입은 RAM-only 불가 |
 | [sdcom](sdcom/README.md) | 연결·메시지 146종·Get/Shift 실기 확인, D2A 상태머신, 안전 규칙 | standalone D2A 미확정 |
 | [backup](backup/README.md) | Backup.bin Tier A/B/C, propId 6개 실측, 제브라 SDCom 불가 | CVPDM 그룹 쓰기는 settings |
-| [boot](boot/README.md) | 파티션/부팅 체인, 공장 WBI 상시 재개, dmode+env.txt 자동 실행, 복구 불변식 | 교체 전환만 위험 |
+| [boot](boot/README.md) | 파티션/부팅 체인, 공장 WBI 상시 재개, dmode+env.txt 자동실행, 복구 불변식, **warm-boot 복원·에뮬 SS모드(0005)** | ⚠️ **LD_PRELOAD 자동실행은 warm 재개서 안 걸림 → route-b 주입이 견고** |
 | [persistence](persistence/README.md) | **cold-boot 생존 패치 타당성(0001)** — a5000 코드 서명 없음, LD_PRELOAD가 1순위 | 최고 벽돌위험 경로 조사(절차서 아님) |
 | [memory](memory/README.md) | **RAM 풋프린트/트림(0001)** — Linux 175.8MB, 회수가능 ~48MB, 진짜 위험=OOM시 im.elf가 먼저 죽음(oom_adj=0) | 우리 UI +9.8MB → ~3MB 감량 가능 |
 | [playback](playback/README.md) | **동영상 재생(0001)·RAW 갤러리 썸네일(0002)** — 재생영상=ch51(라이브뷰 평면), RAW는 매립 JPEG 디코드(재현상 아님) | 정지=우리 직접디코드(구현됨), 동영상=순정 트리거+ch53 오버레이 |

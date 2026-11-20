@@ -26,6 +26,14 @@
 #      A5K_QEMU=<binary>     qemu-system-arm to run (default qemu/build/qemu-system-arm)
 #      A5K_LOADER=<cpio>     stage-1 loader initramfs (default provision/loader.cpio)
 #      A5K_HANDOFF=<file>    bootloader hand-off page (default data/handoff_80021000.bin)
+#      A5K_WBI_SNAPSHOT=<dir> SS warm boot: restore the factory WBI RAM
+#                            snapshot (dir with ram.bin + map.tsv, device-
+#                            private) into DDR on a cold power-on and resume
+#                            it (~1 s) like the real camera, instead of a full
+#                            cold boot. docs/RE_WARM_RESUME.md
+#      A5K_SS_LOWMEM=<file>  (experiment) raw 0x80000000 NAND/MUMIN hand-off
+#                            captured from a cold boot, injected on the SS
+#                            path so mumindrv can resume (see RE_WARM_RESUME)
 E="$(cd "$(dirname "$0")" && pwd)"
 R="$(dirname "$E")"   # optional parent checkout (firmware/, backup/ next to this repo)
 # unpacked official updater: $A5K_FW, else ./firmware, else ../firmware
@@ -56,7 +64,8 @@ if [ "${A5K_DIRECT:-0}" = 1 ]; then
 fi
 [ -f "$NAND" ] || { echo "run.sh: $NAND missing — run emulator/provision.sh first" >&2; exit 1; }
 [ -n "${A5K_LOADER:-}" ] || [ -f "$LOADER" ] || python3 -I "$E/provision/mkinitramfs.py" "$E/provision/loader.cpio" loader.sh >/dev/null
+WBISNAP="${A5K_WBI_SNAPSHOT:+,wbi-snapshot=$A5K_WBI_SNAPSHOT}"
 exec "$QEMU" \
-  -M "$M,submicro=on,submicro-frames=${A5K_SMFRAMES:-$E/data/submicro_frames.bin},nand=$NAND,loader=$LOADER,preload=${A5K_HANDOFF:-$E/data/handoff_80021000.bin}@0x80021000" \
+  -M "$M,submicro=on,submicro-frames=${A5K_SMFRAMES:-$E/data/submicro_frames.bin},nand=$NAND,loader=$LOADER,preload=${A5K_HANDOFF:-$E/data/handoff_80021000.bin}@0x80021000$WBISNAP" \
   -m 512M -kernel "$F/vmlinux.bin" \
   ${A5K_SD:+-drive if=sd,file=$A5K_SD,format=raw} ${SER[@]+"${SER[@]}"} "$@"

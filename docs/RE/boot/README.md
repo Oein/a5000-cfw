@@ -6,9 +6,12 @@
 | 0002 | [WBI 스냅샷과 /usr 수정의 함정](0002.%20wbi-warm-snapshot.md) | 공장 스냅샷 재개 observed, 생성/무효화 derived |
 | 0003 | [dmode + env.txt 자동 실행](0003.%20autostart-via-dmode-and-env.md) | observed (에뮬 확정) |
 | 0004 | [복구 경로와 복구 불변식](0004.%20recovery-paths-and-invariant.md) | derived, 실기 리허설 미검증 |
+| 0005 | [Warm 부팅(WBI 스냅샷 재개) 복원 시퀀스·에뮬 구현](0005.%20warm-boot-restore.md) | 시퀀스 derived+observed, SS 커널·디바이스 재개 observed, im.elf UI 미도달 |
 
 ## 열린 항목
-- warm 재개 하에서 dmode/env.txt 자동 실행이 실기에서 적용되는 시점 확인
+- (해소: [0005] §6) ~~warm 재개 하에서 dmode/env.txt 자동 실행이 적용되는가~~ → **warm(HOT·SS)에서는 적용 안 됨**(init 미실행); 콜드에서만 트리거, warm엔 route-b 주입
+- SS 경로 im.elf userland 정합성(엔진 상태) — [0005] §5
+- SS 경로 NAND/MUMIN 하드오프 보드 재현 — [0005] §5
 - `touch /setting/updater/mode` 리허설(사용자 승인 필요)
 - 부트로더의 비-플래그 진입(키 홀드) 존재 여부
 - ud_wbi_drop 라이브 효과(위험, 미시도)

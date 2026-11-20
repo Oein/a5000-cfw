@@ -378,3 +378,55 @@ Common: fresh NAND clone, copied binary, `A5K_SHELL=<port>`, monitor on TCP.
   monitor then spins in `em_dump_write` → `pl011_console_write`. The UI keeps running on CPU1..3, but IRQs routed to
   CPU0 (UART2 152, so the shell) are dead. The stock console (`ttynull`) is not affected. Not investigated further
   (QEMU PL011 TX raw interrupt state after reset vs the real UART [?]).
+
+## 8. SS (WBI snapshot) boot: the "DDR lost" warm resume (2026-11-21)
+
+§2.3 left the snapshot boot out of scope ("the emulator cold-boots vmlinux"). This section is the implementation of
+it: on a cold power-on with a valid WBI, resume the **factory snapshot** (nflasha5) in place instead of a 3-minute
+cold boot, like the real camera's boot mode 11 (SS). RE detail and the autostart verdict: `docs/RE/boot/0005. warm-boot-restore.md`.
+
+**Why it is cheap.** The SS resume vector `cxd90014_cpu_resume_ssboot` (0x800523BC) only does `cxd90014_ssboot_stat = 4`
+and falls through to `cxd90014_cpu_resume` (0x800523CC) — the *same* CPU-context restore the HOT path already proved
+(§2.2, §3.3). And the 1073-section / 127 MB lz77 snapshot is already decompressed offline by `tools/wbi.py` into
+`ram.bin` + `map.tsv` (rows `offset pa va len`). So SS = (a) section-copy `ram.bin` into DDR per `map.tsv`, (b) enter
+at 0x800523BC. No lz77 decoder and no bootloader disassembly are needed; the kernel resume code does the rest.
+
+**Machine option.** `-M sony-a5000,wbi-snapshot=<DIR>` (DIR holds `ram.bin`+`map.tsv`, **device-private, loaded at
+runtime, never committed**); `run.sh` exposes it as `A5K_WBI_SNAPSHOT=<DIR>`. A cold power-on (initial, power cycle, or
+SoC reset — anything that is not a HOT/DDR-kept resume) then restores the snapshot into DDR and enters the SS vector,
+with `sctlr-fetch-delay`, CPU0 sp = 0xC0020000 and the stub-entry literal reused from the HOT path (`a5k_ssboot_load`,
+`a5k_boot_reset`). Without the option the machine cold-boots exactly as before (no regression; the cold boot to the
+shooting screen was re-confirmed). HOT (`warm-resume=on`) and SS coexist: warm off → HOT (DDR kept), cold/initial → SS.
+
+**What works.** Snapshot loads (1073 sections, 0 skipped); SS entry (`power-on, SS WBI-snapshot boot -> 0x800523bc`,
+no `stage 1 (loader)`); `WARMBOOT` (the snapshot-resume branch: state 4, `pm_mem_alive` 0); CPU1..3 up; **MMU on**
+(PC runs from kernel VA, no XN fault); the full device resume completes — `PM: resume of devices complete`,
+`Restarting tasks ... done.` — in ~88 ms, with no `Linux version` banner (resume-in-place, not a cold boot). printk
+timestamps restart at 0 as on HOT.
+
+**Blocker 1 — MUMIN FTL hand-off (solved, needs a board stand-in).** The snapshot omits 0x80000000..0x80021000
+(memrsv 0x28000@0x80000000 = the MUMIN hand-off). A cold boot's stage-1 `nand.ko boot_mode=1` rebuilds it; SS skips
+stage 1, so `mumindrv` resume fails (`mumin_register_devctrl_info ... stat 0`) and the UDIF resume chain aborts there,
+before liro/display — black screen. **Experiment** `A5K_SS_LOWMEM=<file>` injects a raw 0x80000000 image captured from
+a cold boot (`mon.py <mon> 'pmemsave 0x80000000 0x21000 "f.bin"'`; magic `iMuM` = MUMIN, 132 KiB) on the SS path:
+mumindrv then resumes cleanly and the whole UDIF chain (b-252, utm, uipc, utimer, backup) completes. So this is a
+device-coherence gap, not a resume defect. **Fix direction:** the board should stand in for the bootloader's NAND
+hand-off on SS (reproduce stage-1's `iMuM` hand-off, or do a minimal NAND re-init before the resume), as it already
+does for the ARM7 SRAM dev-info at PA 0x3F00.
+
+**Blocker 2 — im.elf userland coherence (open, the real blocker).** With Blocker 1's hand-off injected, the device
+resume completes but the factory snapshot's `im.elf` (pid 148) then faults with a null jump (PC 0x0428A726, r0 = 0,
+address 0) and enters the exception monitor — still a black screen. The factory snapshot assumes the *exact* state of
+the real engine (Rigel/VDF, av-cam sub-core, sensor/ISP, SA-DSP); the emulator's engine models do not reproduce it, so
+some handle/object lookup returns null. This is the same class as the HOT w1..w3 av-cam fatal (§3.3), but deeper: HOT
+resumes the emulator's *own* cold-boot DDR (consistent with the models), while SS resumes a *foreign* real-camera
+image. Next step: identify the lookup just before 0x0428A726 (an engine/driver state read) and correct that model.
+
+**Verdict for the autostart question (`docs/RE/boot/0005` §6).** On *any* warm resume (HOT or SS) `/sbin/init` does
+not re-run — observed here: on SS the ttyAM1 shell never appears, i.e. the snapshot's factory cmdline (`console=ttynull`)
+and already-run init stand; `Restarting tasks` thaws the existing processes. So `/setting` `dmode`+`env.txt` LD_PRELOAD
+(`check_mode_file`/`set_oreore_env`) is **not** applied on a warm power-on; it triggers only on a cold boot. On a
+warm-always camera, route-b injection into the already-running im.elf — not the init LD_PRELOAD path — is what survives.
+
+**Files changed:** `qemu-overlay/hw/arm/sony_a5000.c` (the `wbi-snapshot` option, `a5k_ssboot_load`, the SS branch of
+`a5k_boot_reset`, and the `A5K_SS_LOWMEM` experiment hook), `run.sh` (`A5K_WBI_SNAPSHOT`, `A5K_SS_LOWMEM` env).

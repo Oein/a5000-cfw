@@ -74,6 +74,10 @@
 #define A5K_HANDOFF_RESUME  0x80021054ULL   /* pm.resume= (resume vector) */
 #define A5K_HANDOFF_SUS_ERR 0x80021060ULL   /* pm.sus_error= */
 #define A5K_HOT_SP          0xC0020000u     /* HOT entry sp, see a5k_boot_reset */
+/* SS (WBI snapshot) resume vector: nflasha5 header +0x0C =
+ * cxd90014_cpu_resume_ssboot (0x800523BC); sets cxd90014_ssboot_stat = 4,
+ * then falls through to cxd90014_cpu_resume (docs/RE_WARM_RESUME.md 2.3) */
+#define A5K_SSBOOT_RESUME   0x800523BCu
 #define A5K_MACH_ID         0xDA8
 #define A5K_PERIPH_BASE     0xF8000000ULL
 #define A5K_L2C_BASE        0xF8002000ULL
@@ -187,6 +191,9 @@ struct A5KMachineState {
     int reset_kind;                 /* A5K_RESET_* consumed on reset */
     /* warm off -> HOT resume (docs/RE_WARM_RESUME.md section 3) */
     bool warm_resume;               /* -M warm-resume=on|off */
+    char *wbi_snapshot;             /* -M wbi-snapshot=DIR (ram.bin+map.tsv):
+                                     * SS factory-snapshot boot (device-private,
+                                     * loaded at runtime; docs/RE_WARM_RESUME) */
     bool hdmi;                      /* -M hdmi=on|off: cable plugged */
     char *hdmi_edid;                /* -M hdmi-edid=FILE */
     DeviceState *hdmi_tx, *cec;
@@ -1395,6 +1402,100 @@ static void a5k_wbimem_preload(A5KMachineState *s)
                 "regions cleared by the board");
 }
 
+/*
+ * SS (WBI snapshot) boot (docs/RE_WARM_RESUME.md 2.3, docs/RE/boot/0002):
+ * the real camera, on a cold power-on with a valid WBI (DDR lost), does not
+ * full-cold-boot vmlinux+initrd (boot mode 1).  The bootloader loads the
+ * factory RAM snapshot (nflasha5, 1073 sections, lz77) into DDR and jumps to
+ * the header resume vector 0x800523BC (boot mode 11 SS); the already-booted
+ * kernel resumes in place in ~1 s.  Here the snapshot is supplied, already
+ * decompressed, as a device-private directory (ram.bin + map.tsv rows
+ * "offset pa va len", from tools/wbi.py); the bootloader's lz77 decompressor
+ * is not reimplemented.  The snapshot BYTES are never committed; the path is
+ * a runtime -M wbi-snapshot=DIR option.
+ */
+static void a5k_ssboot_load(A5KMachineState *s)
+{
+    AddressSpace *as = &address_space_memory;
+    g_autofree char *mp = g_build_filename(s->wbi_snapshot, "map.tsv", NULL);
+    g_autofree char *rp = g_build_filename(s->wbi_snapshot, "ram.bin", NULL);
+    g_autoptr(GError) err = NULL;
+    g_autoptr(GMappedFile) ram = g_mapped_file_new(rp, FALSE, &err);
+    g_autofree char *mapdata = NULL;
+    const uint8_t *rbuf;
+    gsize rlen, maplen;
+    char *save = NULL, *line;
+    uint32_t nsec = 0, nskip = 0;
+    uint64_t total = 0;
+
+    if (!ram) {
+        error_report("sony-a5000: wbi-snapshot: %s", err->message);
+        exit(1);
+    }
+    rbuf = (const uint8_t *)g_mapped_file_get_contents(ram);
+    rlen = g_mapped_file_get_length(ram);
+    if (!g_file_get_contents(mp, &mapdata, &maplen, &err)) {
+        error_report("sony-a5000: wbi-snapshot: %s", err->message);
+        exit(1);
+    }
+    for (line = strtok_r(mapdata, "\n", &save); line;
+         line = strtok_r(NULL, "\n", &save)) {
+        uint64_t off, pa, va, len;
+
+        if (sscanf(line, "%" SCNx64 " %" SCNx64 " %" SCNx64 " %" SCNx64,
+                   &off, &pa, &va, &len) != 4) {
+            continue;
+        }
+        if (off + len > rlen) {
+            error_report("sony-a5000: wbi-snapshot: section 0x%" PRIx64
+                         "@0x%" PRIx64 " past end of ram.bin (%zu B)",
+                         len, off, (size_t)rlen);
+            exit(1);
+        }
+        if (!a5k_ddr_range(pa, len)) {
+            nskip++;                /* section outside DDR: skip */
+            continue;
+        }
+        address_space_write(as, pa, MEMTXATTRS_UNSPECIFIED, rbuf + off, len);
+        nsec++;
+        total += len;
+    }
+    info_report("sony-a5000: WBI snapshot restored: %u sections, %" PRIu64
+                " B to DDR (%u skipped) from %s", nsec, total, nskip,
+                s->wbi_snapshot);
+
+    /*
+     * The WBI snapshot deliberately omits the MUMIN FTL hand-off at
+     * 0x80000000..0x80021000 (memrsv 0x28000@0x80000000): on the real camera
+     * the bootloader does the NAND duties and leaves this region, and on a
+     * cold boot the emulator's stage-1 nand.ko (boot_mode=1) rebuilds it
+     * (docs/RE_REBOOT.md).  SS skips stage 1, so without it mumindrv_resume
+     * fails ("mumin_register_devctrl_info ... stat 0") and the UDIF resume
+     * chain aborts before liro/display.  EXPERIMENT (env A5K_SS_LOWMEM): a
+     * raw image of 0x80000000 captured from a cold boot, to confirm the gap
+     * and the fix direction (the board should stand in for the bootloader's
+     * NAND hand-off on SS, docs/RE_WARM_RESUME.md).  Loaded last so the
+     * snapshot's own 0x80021000 hand-off page is not disturbed.
+     */
+    const char *low = getenv("A5K_SS_LOWMEM");
+    if (low && *low) {
+        g_autofree char *ldata = NULL;
+        gsize llen;
+        g_autoptr(GError) lerr = NULL;
+        if (!g_file_get_contents(low, &ldata, &llen, &lerr)) {
+            error_report("sony-a5000: A5K_SS_LOWMEM: %s", lerr->message);
+            exit(1);
+        }
+        if (llen > 0x21000) {
+            llen = 0x21000;         /* do not cross into the snapshot page */
+        }
+        address_space_write(as, A5K_DDR_BASE, MEMTXATTRS_UNSPECIFIED, ldata,
+                            llen);
+        info_report("sony-a5000: SS experiment: %zu B NAND hand-off written "
+                    "to 0x80000000 from %s", (size_t)llen, low);
+    }
+}
+
 static void a5k_boot_reset(void *opaque)
 {
     A5KMachineState *s = opaque;
@@ -1403,6 +1504,10 @@ static void a5k_boot_reset(void *opaque)
     bool ext;
 
     bool hot = s->reset_kind == A5K_RESET_HOT;
+    /* SS WBI-snapshot boot replaces the full cold boot whenever a snapshot is
+     * supplied and this is not a HOT (DDR-kept) resume (docs/RE_WARM_RESUME
+     * 2.3): initial power-on, a cold power cycle, or a SoC reset/reboot. */
+    bool ss = s->wbi_snapshot && s->wbi_snapshot[0] && !hot;
 
     if (hot) {
         /*
@@ -1420,7 +1525,26 @@ static void a5k_boot_reset(void *opaque)
     } else {
         a5k_handoff_restore(s);             /* factory page for this boot */
     }
-    if (s->reset_kind == A5K_RESET_POWER) {
+    if (ss) {
+        /*
+         * Cold power-on with a valid WBI (docs/RE_WARM_RESUME.md 2.3): DDR
+         * and IRAM were lost, so clear both as for a power cycle, then the
+         * bootloader restores the factory snapshot into DDR.  The hand-off
+         * page (0x80021000) is a ROM blob restored by rom_reset after this
+         * handler (factory +0x54 = resume vector, matching the snapshot), so
+         * loading the snapshot over it is harmless.  Enter at the header SS
+         * resume vector; the saved CPU context (sleep_save_sp, page tables)
+         * comes from the snapshot, exactly like a HOT resume.
+         */
+        address_space_set(as, A5K_DDR_BASE, 0, A5K_DDR_SIZE,
+                          MEMTXATTRS_UNSPECIFIED);
+        address_space_set(as, A5K_IRAM_BASE, 0, A5K_IRAM_SIZE,
+                          MEMTXATTRS_UNSPECIFIED);
+        a5k_ssboot_load(s);
+        info_report("sony-a5000: power-on, SS WBI-snapshot boot -> 0x%08x",
+                    A5K_SSBOOT_RESUME);
+        s->off_info_valid = false;          /* micro: off data consumed */
+    } else if (s->reset_kind == A5K_RESET_POWER) {
         /* power loss: DDR and IRAM content gone, ROM blobs come back next */
         address_space_set(as, A5K_DDR_BASE, 0, A5K_DDR_SIZE,
                           MEMTXATTRS_UNSPECIFIED);
@@ -1452,20 +1576,22 @@ static void a5k_boot_reset(void *opaque)
     address_space_write(as, A5K_SMP_MBOX, MEMTXATTRS_UNSPECIFIED, mbox,
                         sizeof(mbox));
 
-    uint32_t entry = cpu_to_le32(hot ? s->hot_entry : A5K_KERNEL_ADDR);
+    uint32_t entry = cpu_to_le32(hot ? s->hot_entry :
+                                 ss ? A5K_SSBOOT_RESUME : A5K_KERNEL_ADDR);
     address_space_write(as, A5K_STUB_ENTRY_LIT, MEMTXATTRS_UNSPECIFIED,
                         &entry, 4);
-    if (hot) {
+    if (hot || ss) {
         /*
-         * The stub still programs the GIC (ITARGETSR, ICFGR) and enters
-         * the resume vector with the MMU off; r0..r2 are not used.
+         * HOT and SS both enter a kernel resume vector with the MMU off; the
+         * stub still programs the GIC (ITARGETSR, ICFGR); r0..r2 are not used.
          * cxd90014_cpu_resume calls pl310_init and cxd90014_smp_init before
          * it restores the saved sp, so it runs on the bootloader's stack:
          * without one (sp = 0 after the CPU reset) the first push faults
          * (DFAR 0xffffffe4).  hypothesis: IRAM top of the sleep-code area,
          * 0xC0020000 (the sp the IRAM sleep code itself ran on at the off,
          * RE_WARM_RESUME.md 1.2); the a5k_cpu_reset handlers ran before
-         * this one, so the value sticks.
+         * this one, so the value sticks.  For SS the snapshot's own
+         * sleep_save_sp (in DDR) is used once cxd90014_cpu_resume restores it.
          */
         s->cpu[0]->env.regs[13] = A5K_HOT_SP;
         goto out;
@@ -2349,6 +2475,16 @@ static void a5k_set_rtclost(Object *o, bool v, Error **errp)
     A5K_MACHINE(o)->rtc_lost = v;
 }
 
+static char *a5k_get_wbisnap(Object *o, Error **errp)
+{
+    return g_strdup(A5K_MACHINE(o)->wbi_snapshot);
+}
+static void a5k_set_wbisnap(Object *o, const char *v, Error **errp)
+{
+    g_free(A5K_MACHINE(o)->wbi_snapshot);
+    A5K_MACHINE(o)->wbi_snapshot = g_strdup(v);
+}
+
 static char *a5k_get_nfc(Object *o, Error **errp)
 {
     return g_strdup(A5K_MACHINE(o)->nfc);
@@ -2701,6 +2837,15 @@ static void a5k_class_init(ObjectClass *oc, const void *data)
     object_class_property_set_description(oc, "warm-resume",
         "Resume a warm off (idle power save, power lever) from the kept DDR "
         "image like the real camera (HOT boot); off = always cold power-on");
+    object_class_property_add_str(oc, "wbi-snapshot", a5k_get_wbisnap,
+                                  a5k_set_wbisnap);
+    object_class_property_set_description(oc, "wbi-snapshot",
+        "Directory holding the factory WBI RAM snapshot (ram.bin + map.tsv, "
+        "device-private, decompressed by tools/wbi.py): a cold power-on then "
+        "restores that snapshot into DDR and resumes it (boot mode 11 SS, "
+        "~1 s) like the real camera instead of a full cold boot "
+        "(docs/RE_WARM_RESUME.md). The snapshot bytes are loaded at runtime "
+        "and never committed");
     object_class_property_add_str(oc, "lens", a5k_get_lens, a5k_set_lens);
     object_class_property_set_description(oc, "lens",
         "E-mount lens: none (empty mount, default) or ekit (detect low, "
