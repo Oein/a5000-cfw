@@ -19,6 +19,7 @@ a5000의 순정 UI를 더 나은 커스텀 UI로 교체하되 모든 기능을 �
 | [backup](backup/README.md) | Backup.bin Tier A/B/C, propId 6개 실측, 제브라 SDCom 불가 | CVPDM 그룹 쓰기는 settings |
 | [boot](boot/README.md) | 파티션/부팅 체인, 공장 WBI 상시 재개, dmode+env.txt 자동 실행, 복구 불변식 | 교체 전환만 위험 |
 | [persistence](persistence/README.md) | **cold-boot 생존 패치 타당성(0001)** — a5000 코드 서명 없음, LD_PRELOAD가 1순위 | 최고 벽돌위험 경로 조사(절차서 아님) |
+| [memory](memory/README.md) | **RAM 풋프린트/트림(0001)** — Linux 175.8MB, 회수가능 ~48MB, 진짜 위험=OOM시 im.elf가 먼저 죽음(oom_adj=0) | 우리 UI +9.8MB → ~3MB 감량 가능 |
 | [misc](misc/README.md) | RE 범위 원장, 트랙 B 임계 경로, 기기 워크플로, UI 리소스, 운영 제약 | |
 
 ## 읽는 순서 제안
