@@ -37,7 +37,9 @@ FW_ROOTS = [os.path.join(DATA, 'rootfs_usr'), os.path.join(DATA, 'firmware', 'un
 
 WINDEV = os.environ.get('A5K_WINDEV', 'windev')
 IDA = os.environ.get('A5K_IDA', r'C:\Program Files\IDA Professional 9.4\idat.exe')
-WINWORK = os.environ.get('A5K_WINWORK', r'C:\a5000\predecomp')
+# Forward slashes throughout: scp's remote path and idat accept them on Windows,
+# whereas backslashes break scp-back (see docs/AI_DOCS/0001.LOCAL_DEV_GUIDE.md).
+WINWORK = os.environ.get('A5K_WINWORK', 'C:/a5000/predecomp')
 IDA_SIDE = os.path.join(HERE, 'ida_predecomp_ida.py')
 
 # Highest-value first: things the active RE (display/net/mem) wants, then the rest by size.
@@ -120,28 +122,28 @@ def wait_idle(poll=90, announce=True):
 
 
 def process_one(name, path):
-    win_bin = f'{WINWORK}\\{name}'
+    win_bin = f'{WINWORK}/{name}'
     win_i64 = win_bin + '.i64'
-    pre_out = f'{WINWORK}\\{name}'          # ida-side writes <pre_out>.c/.tsv/.ok
+    pre_out = f'{WINWORK}/{name}'           # ida-side writes <pre_out>.c/.tsv/.ok
     print(f'[predecomp] {name}: upload', flush=True)
     ssh(f'New-Item -ItemType Directory -Force -Path {ps_quote(WINWORK)} | Out-Null', timeout=60)
     up = sh('scp', '-q', path, f'{WINDEV}:{win_bin}')
     if up.returncode != 0:
         print(f'[predecomp] {name}: scp up FAILED: {up.stderr.strip()}', flush=True)
         return False
-    up2 = sh('scp', '-q', IDA_SIDE, f'{WINDEV}:{WINWORK}\\ida_predecomp_ida.py')
+    up2 = sh('scp', '-q', IDA_SIDE, f'{WINDEV}:{WINWORK}/ida_predecomp_ida.py')
     if up2.returncode != 0:
         print(f'[predecomp] {name}: scp script FAILED', flush=True)
         return False
     # 1) auto-analyze -> .i64 (batch). 2) export via our script.
     print(f'[predecomp] {name}: analyze', flush=True)
-    a = ssh(f'& {ps_quote(IDA)} -A -B -L{WINWORK}\\{name}.log {win_bin}', timeout=3600)
+    a = ssh(f'& {ps_quote(IDA)} -A -B -L{WINWORK}/{name}.log {win_bin}', timeout=3600)
     if not _remote_exists(win_i64):
         print(f'[predecomp] {name}: no .i64 produced (rc={a.returncode})', flush=True)
         return False
     print(f'[predecomp] {name}: decompile+export', flush=True)
     ssh(f'$env:PRE_OUT={ps_quote(pre_out)}; & {ps_quote(IDA)} -A '
-        f'-S{ps_quote(WINWORK + chr(92) + "ida_predecomp_ida.py")} {win_i64}', timeout=7200)
+        f'-S{ps_quote(WINWORK + "/ida_predecomp_ida.py")} {win_i64}', timeout=7200)
     if not _remote_exists(pre_out + '.ok'):
         print(f'[predecomp] {name}: export did not complete (.ok missing)', flush=True)
         _remote_rm(win_i64)
