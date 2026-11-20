@@ -9,7 +9,7 @@ a5000의 순정 UI를 더 나은 커스텀 UI로 교체하되 모든 기능을 �
 
 | 카테고리 | 한 줄 현황 | 비고 |
 |---|---|---|
-| [display](display/README.md) | GPU 합성, present 파이프라인, 패널 라우팅, Rigel 클라이언트 시도 — 보고서 있음 | 다른 에이전트 소관 |
+| [display](display/README.md) | GPU 합성, present 파이프라인, 패널 라우팅, Rigel 클라, OSD 제출경로, cached 매핑, **GPU 렌더매니저/핸드오프(0007)** — 보고서 있음 | 순정 OSD는 GPU(GLES2) 렌더 / 핸드오프보다 Recipe A 우선 |
 | [imaging](imaging/README.md) | 라이브뷰 센서→패널 파이프라인(AIF/ISP/RC/VDF/VPH), 이미징 제어면, lean stack 타당성 — 보고서 있음 | 영상생성=Sony 보존, 표시/OSD=지배 가능 |
 | [camera](camera/README.md) | 카메라 읽기 게이트, 모드 enum 등 — 보고서 있음 | 다른 에이전트 소관 |
 | [settings](settings/README.md) | 설정 적용 경로, CVPDM 그룹 테이블 등 — 보고서 있음 | 다른 에이전트 소관 |
@@ -18,6 +18,7 @@ a5000의 순정 UI를 더 나은 커스텀 UI로 교체하되 모든 기능을 �
 | [sdcom](sdcom/README.md) | 연결·메시지 146종·Get/Shift 실기 확인, D2A 상태머신, 안전 규칙 | standalone D2A 미확정 |
 | [backup](backup/README.md) | Backup.bin Tier A/B/C, propId 6개 실측, 제브라 SDCom 불가 | CVPDM 그룹 쓰기는 settings |
 | [boot](boot/README.md) | 파티션/부팅 체인, 공장 WBI 상시 재개, dmode+env.txt 자동 실행, 복구 불변식 | 교체 전환만 위험 |
+| [persistence](persistence/README.md) | **cold-boot 생존 패치 타당성(0001)** — a5000 코드 서명 없음, LD_PRELOAD가 1순위 | 최고 벽돌위험 경로 조사(절차서 아님) |
 | [misc](misc/README.md) | RE 범위 원장, 트랙 B 임계 경로, 기기 워크플로, UI 리소스, 운영 제약 | |
 
 ## 읽는 순서 제안
