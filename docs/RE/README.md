@@ -9,7 +9,7 @@ a5000의 순정 UI를 더 나은 커스텀 UI로 교체하되 모든 기능을 �
 
 | 카테고리 | 한 줄 현황 | 비고 |
 |---|---|---|
-| [display](display/README.md) | GPU 합성, present 파이프라인, 패널 라우팅, Rigel 클라, OSD 제출경로, cached 매핑, **GPU 렌더매니저/핸드오프(0007)** — 보고서 있음 | 순정 OSD는 GPU(GLES2) 렌더 / 핸드오프보다 Recipe A 우선 |
+| [display](display/README.md) | GPU 합성, present, 패널 라우팅, Rigel 클라, OSD 제출경로, cached 매핑, GPU 핸드오프(0007), **측광·표시보조(0008)** | 순정 OSD=GLES2; 측광=CVPDM g22/SDCom 270, 격자/히스토그램/DISP는 ch53, 전자수평계 없음 |
 | [imaging](imaging/README.md) | 라이브뷰 센서→패널 파이프라인(AIF/ISP/RC/VDF/VPH), 이미징 제어면, lean stack 타당성 — 보고서 있음 | 영상생성=Sony 보존, 표시/OSD=지배 가능 |
 | [camera](camera/README.md) | 카메라 읽기 게이트, 모드 enum 등 — 보고서 있음 | 다른 에이전트 소관 |
 | [settings](settings/README.md) | 설정 적용 경로, CVPDM 그룹 테이블 등 — 보고서 있음 | 다른 에이전트 소관 |
