@@ -1,0 +1,8 @@
+{
+  "name": "a5k-live-activity",
+  "version": "0.1.0",
+  "description": "ActivityKit Live Activity for the a5k camera session (local Expo module)",
+  "main": "index.ts",
+  "private": true,
+  "license": "MIT"
+}

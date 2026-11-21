@@ -31,6 +31,7 @@ root
 │   ├── android-app/        트랙 A: ILCE Remote 포크 (UI 설계 검증용 Android 앱)
 │   ├── custom-binary-app/  트랙 B(현재 주력): route-b a5kinproc.so (im.elf 주입 네이티브 UI). STATUS.md
 │   ├── custom-firmware/    교체 전환(미래 계획). 실기 적용 금지
+│   ├── mobile-remote/      CFW 짝 스마트폰 앱(iOS 우선+Android, Expo). GPS 응답·백그라운드 동기화·레시피·원격조작. 프로토콜 placeholder+mock. 자체 CLAUDE/README
 │   ├── tools/              서드파티 체크아웃(gitignore) + scripts/(우리 운영 스크립트, cam.py 등)
 │   └── data/               ⚠️ 비공개: Sony 펌웨어 원본/추출, 디컴파일, NAND 백업, 디바이스 덤프, rootfs_usr 심링크
 └── docs/

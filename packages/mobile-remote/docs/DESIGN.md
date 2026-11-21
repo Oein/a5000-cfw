@@ -1,0 +1,101 @@
+# mobile-remote 설계
+
+CFW 단계에서 카메라(α5000)와 짝을 이루는 스마트폰 앱. **iOS 우선, Android 동시**(Expo/React Native, 하나의 코드). 카메라 통신 규격은 아직 미정 → 지금은 placeholder 프로토콜(v0/v0+, [PROTOCOL.md](PROTOCOL.md))과 **mock 카메라**(`mock/`)로 앱 전체를 실기 없이 구현·검증한다.
+
+UI 베이스: [sony-remote-reboot/viewer](https://github.com/Oein/sony-remote-reboot) (같은 저자의 Expo 앱)를 가져와 확장.
+
+---
+
+## 기능 4종
+
+| # | 기능 | 위치 | 상태 |
+|---|---|---|---|
+| 1 | 백그라운드 GPS 응답 (카메라가 EXIF에 기록) | `src/features/geotag/`, `src/features/session/` | 구현, mock E2E 검증 |
+| 2 | 백그라운드 사진/영상 동기화 + 오프라인 보관함 | `src/features/sync/`, `src/app/(tabs)/library.tsx` | 구현 |
+| 3 | 사진 레시피 (Recipe Lab 호환) | `src/features/recipes/`, `src/app/(tabs)/recipes.tsx` | 구현, 공유코드 벡터 검증 |
+| 4 | 원격 조작 (모드/셔터/조리개/ISO/WB/초점/줌/녹화) | `src/app/(tabs)/index.tsx` (viewer 그대로) | viewer 기능 유지 |
+
+### 1. GPS — 폰은 "답변만" 한다
+- **EXIF는 카메라가 쓴다.** 폰은 사진 파일을 건드리지 않는다.
+- 흐름: 카메라가 촬영 → `gps.request {reqId, shotId, capturedAt}` → 폰이 `gps.response {reqId, source, fix}` → 카메라가 그 사진 EXIF에 기록.
+- 응답 선택(`geotag/answer.ts`, 순수 함수·테스트됨):
+  1. **live**: 최신 fix가 촬영 시각 ±60초 이내 & 정확도 ≤200m
+  2. **track**: 폰의 위치 기록에서 촬영 시각 보간(±5분 보간, 10분 넘으면 없음)
+  3. **none**: 위 둘 다 없음. 방금 찍은 사진(2분 이내)만 OS에 새 fix를 요청(최대 8초) 후 재시도.
+- **연결이 끊긴 동안 찍은 사진**: 카메라가 요청을 큐에 쌓아뒀다가 재연결 시 원래 `capturedAt`으로 다시 묻는다 → 폰은 track으로 답한다. 그래서 카메라가 범위 밖이어도 폰은 저전력으로 위치 기록을 계속한다.
+- **시계**: 카메라는 타임존이 없다(벽시계를 UTC처럼 읽은 epoch ms). `hello.clock`으로 `offset = cameraClock − phoneUtc`를 측정해 타임존+드리프트를 한 번에 보정(`trackMath.ts`).
+- 위치 기록은 폰에만(`Documents/track/YYYY-MM-DD.jsonl`, 보관 기간 설정, 기본 14일). 카메라에는 사진 한 장의 위치만 간다.
+
+### 2. 동기화 — 이벤트 구동, 폴링 없음
+- 카메라가 `photo.added`를 보낼 때만 그 사진을 받는다(라이브뷰 중이어도 카메라 부하 = 썸네일 몇 KB GET 1회).
+- 수준: 끔 / 썸네일(기본) / 미리보기 / 원본(+사진 앱 자동 저장).
+- 예산: 포그라운드 40장·60초, 백그라운드 8장·20초 per pass. 남으면 이어서 조금씩.
+- 이벤트 채널이 없는 카메라 앱(구 ILCE Remote)에는 포그라운드 15초 폴링 fallback. OS 주기 작업(`expo-background-task`, ≥15분, best-effort)은 따라잡기용.
+- 보관함 탭: 폰에 받은 사본 — 카메라 꺼져 있어도 열람.
+- **라이브뷰(MJPEG)는 촬영 탭이 화면에 있고 앱이 포그라운드일 때만** 받는다(카메라에서 가장 무거운 작업). 탭 이동·백그라운드 즉시 끊김.
+- ⚠️ 실기 사실: 순정 펌웨어는 라이브뷰 진입 시 Wi-Fi가 끊기는 현상이 있다(루트 메모리 `device-liveview-wifi-drop`). CFW 쪽에서 해결해야 할 전제 조건 — PROTOCOL.md "CFW 요구사항" 참고.
+
+### 3. 레시피
+- 모델/범위는 [Recipe Lab](https://github.com/voxivoid/recipe-lab-sony-pmca)의 공개 파일/링크 스펙(format 1·2, family `sony-creative-style`)을 따라 **상호 호환**: `.YML` 가져오기/내보내기, `recipelab.io/r#<code>` 공유 링크 encode/decode (그 레포의 공개 테스트 벡터로 검증).
+- **독립 구현**: Recipe Lab은 GPL-3.0 → 코드·76개 레시피 표는 포함하지 않는다. 기본 레시피는 우리 것 10개(순정 스타일 + 몇 가지 룩). 큰 라이브러리는 "가져오기"로.
+- 적용: 레시피 → `CameraChanges`(v0+: creativeStyle/saturation/contrast/sharpness/pictureEffect/option/dro + WB/색온도/AB/GM + EV). 부호 변환 주의: 파일은 앰버·그린이 +, 카메라 링크는 AB=앰버(−)…블루(+), GM=그린(−)…마젠타(+) → 둘 다 뒤집음. B&W 포스터화는 파일 `posterization-bw` ↔ 런타임 `posterization-mono`.
+- 값 검증은 "고치지 않고 거부 + 이유"(Recipe Lab 규칙과 동일). 픽처 이펙트는 JPEG에서만 동작 경고.
+- 나중에 CFW 자체에도 넣을 기능 — 같은 YAML/공유코드 포맷을 쓰면 폰↔카메라 레시피 이동이 그대로 된다.
+
+### 4. 원격 조작
+viewer의 촬영 화면 그대로: 라이브뷰, 셔터/반셔터/AF, 줌, MF·확대, 동영상, 설정 칩(드래그로 바로 변경/탭하면 휠 피커). 프로토콜만 교체되면 된다.
+
+---
+
+## 백그라운드 아키텍처 (핵심)
+
+```
+ camera ──ws events──▶ EventLink ──▶ session ──▶ gps.response (카메라가 EXIF 기록)
+                                        │  ├──▶ photo sync (photo.added → 썸네일)
+ CoreLocation ──task──▶ track + latest ─┘  └──▶ Live Activity (잠금화면 / Dynamic Island)
+```
+
+### 왜 이렇게 하나 (iOS 제약에서 출발)
+- iOS는 백그라운드 앱을 수 초 내 정지시킨다. **계속 실행이 허용되는 정당한 방법 = 위치 백그라운드 모드**(`UIBackgroundModes: location` + "항상" 권한 + 표준 위치 업데이트). 이 앱의 1번 기능이 정확히 위치 서비스이므로 정책상 정당하다.
+- 위치 업데이트가 살아있는 동안 JS 런타임도 살아있다 → 같은 시간에 **WebSocket·GPS 응답·동기화·Live Activity 업데이트**가 돈다. 다른 백그라운드 API(BGTask 등)는 언제 실행될지 보장 없음 → 따라잡기용으로만.
+- **폰이 카메라에 접속**(WebSocket 클라이언트)한다. 폰이 서버가 되는 구조는 iOS 백그라운드에서 불가능.
+- Android: expo-location 포그라운드 서비스(알림 표시)가 같은 역할.
+
+### 세션 상태 기계 (`src/features/session/session.ts`)
+| 상태 | 조건 | 위치 모드 | Live Activity |
+|---|---|---|---|
+| off | 앱 백그라운드 & 백그라운드 연동 꺼짐 | 꺼짐 | 종료 |
+| connecting | 소켓 연결 중 / hello 대기 | 이전 모드 유지 | – |
+| linked | hello 수신 | **linked**: High, 5 m, 5 s | 시작(포그라운드일 때) / 업데이트 |
+| lost | 링크 끊김 | 3분간 linked 유지 → **standby**: Balanced, 50 m, 60 s, deferred 5분 | "재연결 중" |
+| (standby 4h) | 계속 못 찾음 | standby | 종료(잔류 표시) |
+
+- 재연결: 1·2·5·10·20·30초 백오프(최대 30초). 45초 동안 아무 프레임(ping 포함)이 없으면 소켓이 열려 보여도 죽은 것으로 간주(Wi-Fi 끊김 감지). 포그라운드 복귀 시 즉시 재시도.
+- 폰은 `phone.state {background}`를 보내 카메라가 백그라운드 폰에 무거운 것(라이브뷰 등)을 안 보내게 한다.
+- 번들 로드 시 `initSession()`(root layout import) → iOS가 백그라운드에서 앱을 재시작해도 화면 마운트 없이 같은 동작.
+- 포그라운드 전용 모드(백그라운드 연동 꺼짐): 연속 위치 업데이트 없이, 요청이 오면 그때 fix 1회.
+
+### Live Activity (ActivityKit)
+- 잠금화면/배너 + Dynamic Island(compact: 카메라 아이콘 + 위치 기록 장수, expanded: 연결 상태·배터리·GPS 정확도·남은 동기화·마지막 촬영 경과).
+- 구성: `modules/a5k-live-activity/`(로컬 Expo 모듈, Swift: start/update/end) + `targets/live-activity/`(위젯 확장, `@bacons/apple-targets`가 prebuild 시 Xcode 타깃 생성). `A5kSessionAttributes`는 두 곳에 같은 정의(ActivityKit은 타입 이름+Codable로 매칭) — **동기화 유지 필수**.
+- 제약 반영: ① 시작은 **포그라운드에서만** 가능 → 백그라운드에서 연결되면 `needs-foreground`로 표시하고 다음 앱 진입 때 시작. ② 업데이트는 로컬(푸시 없음), 3초로 합치고 중요한 변화(촬영·연결 변화)는 즉시. ③ staleDate(연결 3분/대기 15분)로 앱이 죽었을 때 시스템이 흐리게 표시. ④ 8시간 시스템 한계로 종료되면 감지해 다음 포그라운드에서 재시작.
+- Android에는 해당 없음(포그라운드 서비스 알림이 대신).
+
+### 배터리 / 자원 원칙
+- 정밀 위치는 카메라 연결 중에만. 끊기면 3분 뒤 저전력.
+- 소켓은 작은 JSON만. ping 15초.
+- 동기화는 이벤트 구동 + 예산. 백그라운드에서 원본 대량 다운로드 안 함(원본 레벨이라도 pass당 8장).
+- 라이브뷰는 보이는 동안에만.
+
+---
+
+## 테스트 / 검증
+- `npm test`: 순수 로직 22개 — GPS 응답 선택, 트랙 보간, 시계 오프셋, 이벤트 파싱, 백오프, 레시피 YAML·공유코드(Recipe Lab 공개 벡터)·카메라 매핑.
+- `npm run mock`: mock 카메라. HTTP v0 + v0+ 이벤트(촬영→`photo.added`+`gps.request`, 폰 없을 때 큐→재연결 시 재요청, `EXIF ←` 로그). `GET /api/photos/<id>`의 `gps`로 "카메라가 기록한 위치" 확인.
+- iOS 시뮬레이터: Features › Location으로 위치 시뮬레이션, 앱 백그라운드 후 `curl -XPOST localhost:8080/api/camera/shutter`로 촬영 → mock 로그에 `EXIF ←`가 찍히면 백그라운드 GPS 응답 동작.
+
+## 남은 것 / 열린 질문
+- 실제 CFW 프로토콜(PROTOCOL.md "CFW 요구사항").
+- 카메라 Wi-Fi 연결 방식(AP vs Station)과 iOS 자동 재접속(NEHotspotConfiguration) — 지금은 사용자가 Wi-Fi 연결.
+- Live Activity 푸시 업데이트(앱이 완전히 죽은 경우) — 서버가 필요해 보류.
+- 영상(MP4) 동기화: 현재 사진만. 영상은 크기 때문에 썸네일만 받는 방향 검토.

@@ -11,6 +11,7 @@ packages/
   android-app/         트랙 A: ILCE Remote 포크 (UI 설계 검증용 Android 앱)
   custom-binary-app/   트랙 B(주력): im.elf에 주입하는 네이티브 커스텀 UI (route-b)
   custom-firmware/     교체 전환 (미래 계획)
+  mobile-remote/       CFW 짝 스마트폰 앱 (iOS 우선 + Android, Expo) — mock 카메라로 실기 없이 개발
   tools/               서드파티 체크아웃 + 운영 스크립트
   data/                ⚠️ Sony 독점 자료·기기 백업·디컴파일 — 비공개(README만 추적)
 docs/

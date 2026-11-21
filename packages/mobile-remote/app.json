@@ -1,0 +1,70 @@
+{
+  "expo": {
+    "name": "a5k Remote",
+    "slug": "a5k-mobile-remote",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "dev.oein.a5k.mobileremote",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsLocalNetworking": true
+        },
+        "NSLocalNetworkUsageDescription": "카메라와 같은 Wi-Fi에서 라이브뷰·사진·설정을 주고받습니다.",
+        "UIBackgroundModes": [
+          "location",
+          "processing"
+        ],
+        "NSSupportsLiveActivities": true
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#111113",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "dev.oein.a5k.mobileremote"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "./plugins/withSceneLifecycle",
+      "expo-router",
+      "expo-status-bar",
+      "expo-image",
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "카메라에서 받은 사진을 사진 앱에 저장합니다.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      "expo-video",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "카메라가 사진을 찍을 때 그 위치를 알려주기 위해, 화면이 꺼져 있을 때도 위치를 확인합니다. 위치 기록은 폰에만 저장되고, 카메라에는 사진 한 장의 위치만 보냅니다.",
+          "locationWhenInUsePermission": "카메라가 사진을 찍을 때 그 위치를 알려주기 위해 위치를 확인합니다.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      "expo-background-task",
+      "@bacons/apple-targets"
+    ],
+    "scheme": "a5kremote",
+    "backgroundColor": "#000000",
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
