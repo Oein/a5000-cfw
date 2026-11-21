@@ -2,7 +2,7 @@
 /** @type {import('@bacons/apple-targets/app.plugin').Config} */
 module.exports = {
   type: 'widget',
-  name: 'A5kLiveActivity',
+  name: 'A5kSessionWidget',
   displayName: 'a5k Remote',
   bundleIdentifier: '.liveactivity',
   deploymentTarget: '16.4',
