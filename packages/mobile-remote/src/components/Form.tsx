@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { colors } from '@/lib/theme';
@@ -78,12 +78,40 @@ export function Button({ title, onPress, kind = 'primary', disabled }: { title: 
   );
 }
 
+/** A one-line hint that expands to the full explanation. */
+export function Help({ summary, children }: { summary: string; children?: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Pressable onPress={() => children && setOpen((o) => !o)} disabled={!children} accessibilityRole={children ? 'button' : undefined} style={styles.help}>
+      <Text style={formStyles.help}>
+        {summary}
+        {children ? <Text style={styles.more}>{open ? '  접기' : '  자세히'}</Text> : null}
+      </Text>
+      {open ? <Text style={[formStyles.help, { marginTop: 4 }]}>{children}</Text> : null}
+    </Pressable>
+  );
+}
+
+/** A tappable row inside a Section card (instead of a big standalone button). */
+export function ActionRow({ label, onPress, danger, detail }: { label: string; onPress: () => void; danger?: boolean; detail?: string }) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]} accessibilityRole="button">
+      <View style={styles.rowText}>
+        <Text style={[styles.label, { color: danger ? colors.danger : colors.accent }]}>{label}</Text>
+        {detail ? <Text style={styles.detail}>{detail}</Text> : null}
+      </View>
+    </Pressable>
+  );
+}
+
 export const formStyles = StyleSheet.create({
   help: { color: colors.textDim, fontSize: 13, lineHeight: 19 },
   buttons: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
 });
 
 const styles = StyleSheet.create({
+  help: { paddingHorizontal: 4, paddingTop: 2 },
+  more: { color: colors.accent, fontWeight: '600' },
   sectionWrap: { gap: 6, marginTop: 10 },
   section: { color: colors.textDim, fontSize: 13, fontWeight: '600' },
   card: { backgroundColor: colors.panel, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 4 },

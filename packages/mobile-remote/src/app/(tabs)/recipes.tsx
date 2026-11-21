@@ -1,135 +1,205 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useNavigation } from 'expo-router';
 import { useLayoutEffect, useMemo, useState } from 'react';
-import { Pressable, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { Segmented, Swatch } from '@/components/recipe/Controls';
+import { showActions } from '@/lib/actionSheet';
 import { useCamera } from '@/lib/CameraProvider';
 import { colors } from '@/lib/theme';
-import { applyRecipe } from '@/features/recipes/applyToCamera';
-import { recipeSummary } from '@/features/recipes/summary';
-import { toggleFavorite, useRecipes, type StoredRecipe } from '@/features/recipes/store';
+import { toast } from '@/lib/toast';
+import { applyWithFeedback, confirmDelete, newFromCamera, openDuplicate, openEditor, openShare } from '@/features/recipes/actions';
+import { EFFECT_LABELS, formatThirds, STYLE_LABELS, type Recipe } from '@/features/recipes/model';
+import { markApplied, toggleFavorite, useRecipes, type StoredRecipe } from '@/features/recipes/store';
+import { swatchColors } from '@/features/recipes/swatch';
+
+type Filter = 'all' | 'fav' | 'mine' | 'builtin';
+const FILTER_LABEL: Record<Filter, string> = { all: '전체', fav: '★ 즐겨찾기', mine: '내 레시피', builtin: '기본' };
+
+/** Up to three short tags for a row. */
+function tags(r: Recipe) {
+  const t = [STYLE_LABELS[r.style]];
+  if (r.effect !== 'off') t.push(EFFECT_LABELS[r.effect]);
+  else if (typeof r.whiteBalance === 'number') t.push(`${r.whiteBalance}K`);
+  if (r.exposureThirds) t.push(`${formatThirds(r.exposureThirds)}EV`);
+  else if (r.saturation) t.push(`채도${r.saturation > 0 ? '+' : ''}${r.saturation}`);
+  return t.slice(0, 3);
+}
 
 /**
- * Recipe library (feature 3): favourites, the user's recipes, built-ins. Tap to open, the round
- * button applies it to the camera at once.
+ * Recipe library (feature 3). Tap a recipe to open the editor (with live preview), the button to
+ * apply it straight away, hold for more. The card on top says what the camera has now.
  */
 export default function RecipesScreen() {
   const navigation = useNavigation();
   const { client, connected } = useCamera();
   const { recipes, appliedId } = useRecipes();
   const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<Filter>('all');
   const [busy, setBusy] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+
+  const create = () =>
+    showActions('새 레시피', [
+      { title: '빈 레시피에서 시작', onPress: () => router.push({ pathname: '/recipe/[id]', params: { id: 'new' } }) },
+      ...(connected ? [{ title: '카메라 지금 설정으로 만들기', onPress: () => newFromCamera(client) }] : []),
+      { title: '가져오기 (링크 · 파일 · 텍스트)', onPress: () => router.push('/recipe/import') },
+    ]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <View style={styles.headerButtons}>
-          <Pressable accessibilityLabel="레시피 가져오기" hitSlop={8} onPress={() => router.push('/recipe/import')}>
-            <Ionicons name="download-outline" size={22} color={colors.accent} />
-          </Pressable>
-          <Pressable accessibilityLabel="새 레시피" hitSlop={8} onPress={() => router.push('/recipe/new')}>
-            <Ionicons name="add" size={26} color={colors.accent} />
-          </Pressable>
-        </View>
+        <Pressable accessibilityLabel="새 레시피" hitSlop={10} onPress={create} style={{ marginRight: 14 }}>
+          <Ionicons name="add-circle" size={26} color={colors.accent} />
+        </Pressable>
       ),
     });
-  }, [navigation]);
+  });
 
-  const sections = useMemo(() => {
+  const list = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const match = (r: StoredRecipe) => !q || r.name.toLowerCase().includes(q) || recipeSummary(r).toLowerCase().includes(q);
-    const list = recipes.filter(match);
-    return [
-      { title: '즐겨찾기', data: list.filter((r) => r.favorite) },
-      { title: '내 레시피', data: list.filter((r) => !r.builtin && !r.favorite) },
-      { title: '기본', data: list.filter((r) => r.builtin) },
-    ].filter((s) => s.data.length > 0);
-  }, [recipes, query]);
+    return recipes.filter((r) => {
+      if (filter === 'fav' && !r.favorite) return false;
+      if (filter === 'mine' && r.builtin) return false;
+      if (filter === 'builtin' && !r.builtin) return false;
+      return !q || r.name.toLowerCase().includes(q) || tags(r).join(' ').toLowerCase().includes(q);
+    });
+  }, [recipes, query, filter]);
+
+  const applied = recipes.find((r) => r.id === appliedId) ?? null;
 
   const apply = async (r: StoredRecipe) => {
     setBusy(r.id);
-    setMessage(null);
-    try {
-      await applyRecipe(client, r);
-      setMessage(`"${r.name}" 적용됨`);
-    } catch (e) {
-      setMessage(`적용 실패: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setBusy(null);
-    }
+    if (await applyWithFeedback(client, r)) await markApplied(r.id);
+    setBusy(null);
   };
 
-  return (
-    <View style={styles.screen}>
+  const more = (r: StoredRecipe) =>
+    showActions(r.name, [
+      ...(connected ? [{ title: '카메라에 적용', onPress: () => apply(r) }] : []),
+      { title: r.builtin ? '편집 (사본으로 저장)' : '편집', onPress: () => openEditor(r) },
+      { title: '복제', onPress: () => openDuplicate(r) },
+      { title: '공유 (QR · 링크)', onPress: () => openShare(r) },
+      { title: r.favorite ? '즐겨찾기 해제' : '즐겨찾기', onPress: () => toggleFavorite(r.id).then((on) => toast(on ? '즐겨찾기에 추가' : '즐겨찾기 해제', 'info')) },
+      ...(!r.builtin ? [{ title: '삭제', destructive: true, onPress: () => confirmDelete(r) }] : []),
+    ]);
+
+  const header = (
+    <View style={styles.headerArea}>
+      <View style={styles.nowCard}>
+        {applied ? <Swatch stops={swatchColors(applied)} size={44} radius={11} /> : <View style={styles.nowIcon}><Ionicons name="camera-outline" size={22} color={colors.textDim} /></View>}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.nowLabel}>{connected ? '카메라에 적용된 레시피' : '카메라 연결 안 됨'}</Text>
+          <Text style={styles.nowName} numberOfLines={1}>
+            {applied ? applied.name : '없음 (카메라 자체 설정)'}
+          </Text>
+        </View>
+        {connected ? (
+          <Pressable style={styles.nowButton} onPress={() => newFromCamera(client)} accessibilityLabel="카메라 지금 설정으로 레시피 만들기">
+            <Ionicons name="download-outline" size={16} color={colors.accent} />
+            <Text style={styles.nowButtonText}>지금 설정 저장</Text>
+          </Pressable>
+        ) : null}
+      </View>
       <View style={styles.searchWrap}>
         <Ionicons name="search" size={16} color={colors.textDim} />
-        <TextInput
-          style={styles.search}
-          value={query}
-          onChangeText={setQuery}
-          placeholder="레시피 검색"
-          placeholderTextColor={colors.textDim}
-          autoCorrect={false}
-          clearButtonMode="while-editing"
-        />
+        <TextInput style={styles.search} value={query} onChangeText={setQuery} placeholder="이름·스타일 검색" placeholderTextColor={colors.textDim} autoCorrect={false} clearButtonMode="while-editing" />
       </View>
-      {message ? <Text style={styles.message}>{message}</Text> : null}
-      {!connected ? <Text style={styles.offline}>카메라 연결 안 됨 — 편집·가져오기는 되고, 적용은 연결 후에 돼요</Text> : null}
-      <SectionList
-        sections={sections}
-        keyExtractor={(r) => r.id}
-        stickySectionHeadersEnabled={false}
-        contentContainerStyle={styles.list}
-        renderSectionHeader={({ section }) => <Text style={styles.section}>{section.title}</Text>}
-        renderItem={({ item }) => (
-          <Pressable style={styles.item} onPress={() => router.push({ pathname: '/recipe/[id]', params: { id: item.id } })}>
+      <Segmented values={['all', 'fav', 'mine', 'builtin'] as Filter[]} value={filter} onChange={setFilter} label={(f) => FILTER_LABEL[f]} />
+    </View>
+  );
+
+  return (
+    <FlatList
+      style={styles.screen}
+      contentContainerStyle={styles.list}
+      data={list}
+      keyExtractor={(r) => r.id}
+      ListHeaderComponent={header}
+      keyboardShouldPersistTaps="handled"
+      renderItem={({ item }) => {
+        const isApplied = item.id === appliedId;
+        return (
+          <Pressable
+            style={({ pressed }) => [styles.item, isApplied && styles.itemApplied, pressed && { opacity: 0.7 }]}
+            onPress={() => openEditor(item)}
+            onLongPress={() => more(item)}
+            accessibilityHint="길게 누르면 메뉴">
+            <Swatch stops={swatchColors(item)} size={46} radius={11} />
             <View style={styles.itemText}>
               <View style={styles.nameRow}>
                 <Text style={styles.name} numberOfLines={1}>
                   {item.name}
                 </Text>
-                {item.id === appliedId ? <Text style={styles.badge}>적용됨</Text> : null}
+                {item.favorite ? <Ionicons name="star" size={13} color={colors.accent} /> : null}
               </View>
-              <Text style={styles.summary} numberOfLines={1}>
-                {recipeSummary(item)}
-              </Text>
+              <View style={styles.tags}>
+                {tags(item).map((t) => (
+                  <Text key={t} style={styles.tag}>
+                    {t}
+                  </Text>
+                ))}
+              </View>
             </View>
-            {!item.builtin ? (
-              <Pressable hitSlop={8} accessibilityLabel="즐겨찾기" onPress={() => toggleFavorite(item.id)}>
-                <Ionicons name={item.favorite ? 'star' : 'star-outline'} size={20} color={item.favorite ? colors.accent : colors.textDim} />
+            {isApplied ? (
+              <View style={styles.appliedPill}>
+                <Ionicons name="checkmark" size={14} color="#000" />
+                <Text style={styles.appliedText}>적용됨</Text>
+              </View>
+            ) : (
+              <Pressable
+                style={[styles.applyPill, (!connected || busy !== null) && styles.disabled]}
+                disabled={!connected || busy !== null}
+                hitSlop={6}
+                accessibilityLabel={`${item.name} 카메라에 적용`}
+                onPress={() => apply(item)}>
+                <Text style={styles.applyText}>{busy === item.id ? '…' : '적용'}</Text>
               </Pressable>
-            ) : null}
-            <Pressable
-              style={[styles.apply, (!connected || busy !== null) && styles.disabled]}
-              disabled={!connected || busy !== null}
-              accessibilityLabel={`${item.name} 적용`}
-              onPress={() => apply(item)}>
-              <Ionicons name={busy === item.id ? 'hourglass-outline' : 'color-wand-outline'} size={18} color="#000" />
-            </Pressable>
+            )}
           </Pressable>
-        )}
-        ListEmptyComponent={<Text style={styles.offline}>찾는 레시피가 없어요</Text>}
-      />
-    </View>
+        );
+      }}
+      ListEmptyComponent={
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>
+            {filter === 'fav' ? '즐겨찾기한 레시피가 없어요. 레시피를 길게 눌러 추가하세요.' : filter === 'mine' ? '아직 만든 레시피가 없어요.' : '찾는 레시피가 없어요.'}
+          </Text>
+          {filter === 'mine' ? (
+            <Pressable style={styles.emptyButton} onPress={create}>
+              <Text style={styles.emptyButtonText}>+ 새 레시피</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      }
+    />
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  headerButtons: { flexDirection: 'row', gap: 18, alignItems: 'center', marginRight: 12 },
-  searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, margin: 12, marginBottom: 4, paddingHorizontal: 12, height: 38, borderRadius: 10, backgroundColor: colors.panel },
-  search: { flex: 1, color: colors.text, fontSize: 15 },
-  message: { color: colors.accent, paddingHorizontal: 16, paddingTop: 6 },
-  offline: { color: colors.textDim, paddingHorizontal: 16, paddingTop: 6, fontSize: 13 },
   list: { paddingHorizontal: 12, paddingBottom: 24 },
-  section: { color: colors.textDim, fontSize: 13, fontWeight: '600', marginTop: 16, marginBottom: 6, marginLeft: 4 },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.panel, borderRadius: 12, padding: 12, marginBottom: 6 },
-  itemText: { flex: 1 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerArea: { gap: 8, paddingTop: 12, paddingBottom: 8 },
+  nowCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.panel, borderRadius: 14, padding: 12 },
+  nowIcon: { width: 44, height: 44, borderRadius: 11, backgroundColor: '#1d1d20', alignItems: 'center', justifyContent: 'center' },
+  nowLabel: { color: colors.textDim, fontSize: 12 },
+  nowName: { color: colors.text, fontSize: 16, fontWeight: '700', marginTop: 2 },
+  nowButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, height: 32, borderRadius: 16, borderWidth: 1, borderColor: colors.accent },
+  nowButtonText: { color: colors.accent, fontSize: 12, fontWeight: '700' },
+  searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, height: 38, borderRadius: 10, backgroundColor: colors.panel },
+  search: { flex: 1, color: colors.text, fontSize: 15 },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.panel, borderRadius: 14, padding: 10, marginBottom: 6, borderWidth: 1.5, borderColor: 'transparent' },
+  itemApplied: { borderColor: colors.ok },
+  itemText: { flex: 1, gap: 5 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: { color: colors.text, fontSize: 16, fontWeight: '600', flexShrink: 1 },
-  badge: { color: '#000', backgroundColor: colors.ok, fontSize: 11, fontWeight: '700', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, overflow: 'hidden' },
-  summary: { color: colors.textDim, fontSize: 12, marginTop: 3 },
-  apply: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  tags: { flexDirection: 'row', gap: 5, flexWrap: 'wrap' },
+  tag: { color: colors.textDim, fontSize: 11, backgroundColor: '#1d1d20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, overflow: 'hidden' },
+  applyPill: { paddingHorizontal: 14, height: 32, borderRadius: 16, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  applyText: { color: '#000', fontWeight: '700', fontSize: 13 },
+  appliedPill: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 10, height: 32, borderRadius: 16, backgroundColor: colors.ok },
+  appliedText: { color: '#000', fontWeight: '700', fontSize: 12 },
   disabled: { opacity: 0.35 },
+  empty: { alignItems: 'center', padding: 32, gap: 14 },
+  emptyText: { color: colors.textDim, textAlign: 'center', lineHeight: 20 },
+  emptyButton: { paddingHorizontal: 18, height: 40, borderRadius: 20, backgroundColor: colors.accent, justifyContent: 'center' },
+  emptyButtonText: { color: '#000', fontWeight: '700' },
 });

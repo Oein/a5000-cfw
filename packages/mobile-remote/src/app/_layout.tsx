@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { CameraProvider, useCamera } from '@/lib/CameraProvider';
 import { colors } from '@/lib/theme';
+import { ToastHost } from '@/lib/toast';
 import { useForegroundSync } from '@/features/sync/syncEngine';
 
 initSession();
@@ -37,8 +38,10 @@ export default function RootLayout() {
         <Stack.Screen name="movie/[id]" options={{ title: '동영상' }} />
         <Stack.Screen name="recipe/[id]" options={{ title: '레시피' }} />
         <Stack.Screen name="recipe/import" options={{ title: '레시피 가져오기', presentation: 'modal' }} />
+        <Stack.Screen name="recipe/share" options={{ title: '레시피 공유', presentation: 'modal' }} />
         <Stack.Screen name="library/[key]" options={{ title: '보관함' }} />
       </Stack>
+      <ToastHost />
     </CameraProvider>
   );
 }

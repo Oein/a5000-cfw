@@ -5,17 +5,19 @@ import { BUILTIN_RECIPES } from './builtin';
 import { problem, type Recipe } from './model';
 
 /**
- * The phone's recipe library: built-ins (read-only) + the user's own (AsyncStorage). Names are
+ * The phone's recipe library: built-ins (fixed; editing one saves a copy) + the user's own (AsyncStorage). Names are
  * unique ignoring case, like on the camera.
  */
 
 const KEY = 'recipes.v1';
 const APPLIED_KEY = 'recipes.applied';
+const FAVORITES_KEY = 'recipes.favorites';
 
 export type StoredRecipe = Recipe & { id: string; builtin: boolean; favorite?: boolean };
 
 let custom: StoredRecipe[] | null = null;
 let applied: string | null = null;
+let favorites = new Set<string>();
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((l) => l());
 
@@ -24,9 +26,10 @@ const builtins: StoredRecipe[] = BUILTIN_RECIPES.map((r, i) => ({ ...r, id: `bui
 async function load() {
   if (custom) return custom;
   try {
-    const [raw, last] = await Promise.all([AsyncStorage.getItem(KEY), AsyncStorage.getItem(APPLIED_KEY)]);
+    const [raw, last, favs] = await Promise.all([AsyncStorage.getItem(KEY), AsyncStorage.getItem(APPLIED_KEY), AsyncStorage.getItem(FAVORITES_KEY)]);
     custom = raw ? (JSON.parse(raw) as StoredRecipe[]) : [];
     applied = last;
+    favorites = new Set(favs ? (JSON.parse(favs) as string[]) : custom.filter((r) => r.favorite).map((r) => r.id));
   } catch {
     custom = [];
   }
@@ -39,7 +42,7 @@ async function persist() {
 }
 
 export function allRecipes(): StoredRecipe[] {
-  return [...builtins, ...(custom ?? []).sort((a, b) => a.name.localeCompare(b.name))];
+  return [...builtins, ...(custom ?? []).sort((a, b) => a.name.localeCompare(b.name))].map((r) => ({ ...r, favorite: favorites.has(r.id) }));
 }
 
 export function getRecipe(id: string) {
@@ -74,16 +77,19 @@ export async function saveRecipe(recipe: Recipe, id?: string): Promise<StoredRec
 export async function deleteRecipe(id: string) {
   const list = await load();
   custom = list.filter((r) => r.id !== id);
+  if (favorites.delete(id)) await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify([...favorites]));
   await persist();
 }
 
+/** Favourites work for built-ins too; returns the new state. */
 export async function toggleFavorite(id: string) {
-  const list = await load();
-  const r = list.find((x) => x.id === id);
-  if (r) {
-    r.favorite = !r.favorite;
-    await persist();
-  }
+  await load();
+  const on = !favorites.has(id);
+  if (on) favorites.add(id);
+  else favorites.delete(id);
+  notify();
+  await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify([...favorites]));
+  return on;
 }
 
 export async function markApplied(id: string) {

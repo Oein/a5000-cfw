@@ -7,6 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { HoldButton, PositionBar, RepeatButton, ScrubChip, ZoomRocker, type ScrubOption } from '@/components/Controls';
 import { LiveView } from '@/components/LiveView';
+import { ShootPills } from '@/components/ShootPills';
 import { WheelSheet, type Wheel } from '@/components/WheelSheet';
 import {
   aspectRatio,
@@ -493,9 +494,12 @@ export default function ShootScreen() {
           <Ionicons name="refresh" size={18} color={colors.text} />
         </Pressable>
       )}
-      <View style={styles.statusCorner}>
-        {statusPill}
-        {focusBadge}
+      <View style={styles.statusCorner} pointerEvents="box-none">
+        <View style={styles.statusRow} pointerEvents="none">
+          {statusPill}
+          {focusBadge}
+        </View>
+        {connected ? <ShootPills /> : null}
       </View>
     </View>
   );
@@ -753,7 +757,8 @@ const styles = StyleSheet.create({
   // Controls sit low, near the thumb and the shutter
   portraitControls: { paddingTop: 10, paddingBottom: 6 },
 
-  statusCorner: { position: 'absolute', top: 10, left: 10, flexDirection: 'row', gap: 6 },
+  statusCorner: { position: 'absolute', top: 10, left: 10 },
+  statusRow: { flexDirection: 'row', gap: 6 },
   afFrame: { position: 'absolute', borderWidth: 2, borderColor: colors.ok, borderRadius: 2 },
   afFrameWarn: { borderColor: colors.accent },
   focusBadge: {

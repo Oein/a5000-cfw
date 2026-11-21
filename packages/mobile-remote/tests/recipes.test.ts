@@ -78,3 +78,49 @@ test('recipe → camera changes flips WB fine-tune signs', () => {
   assert.equal(c.pictureEffectOption, 'posterization-mono');
   assert.equal(recipeChanges({ ...defaultRecipe(), whiteBalance: 'keep' }).whiteBalance, undefined);
 });
+
+import { lookSnapshot, recipeFromCamera } from '../src/features/recipes/fromCamera.ts';
+import { swatchColors } from '../src/features/recipes/swatch.ts';
+import type { CameraState } from '../src/lib/camera.ts';
+
+/** A camera state after applying `r` (what the mock / a camera would report). */
+function stateAfter(r: ReturnType<typeof defaultRecipe>): CameraState {
+  const c = recipeChanges(r);
+  return {
+    mode: 'manual', sceneMode: 'manual-exposure', sceneModeValues: [], iso: 400, isoValues: [], shutter: [1, 125], shutterText: '1/125',
+    aperture: 5.6, ev: c.ev ?? 0, evMin: -9, evMax: 9, evStep: 1 / 3, whiteBalance: c.whiteBalance ?? 'daylight', whiteBalanceValues: [],
+    driveMode: 'single', driveModeValues: [], focusMode: 'auto', colorTemperature: c.colorTemperature ?? 5500, wbAB: c.wbAB ?? 0, wbGM: c.wbGM ?? 0,
+    look: { creativeStyle: c.creativeStyle!, saturation: c.saturation!, contrast: c.contrast!, sharpness: c.sharpness!, pictureEffect: c.pictureEffect!, pictureEffectOption: c.pictureEffectOption, dro: c.dro! },
+  };
+}
+
+test('apply → read back from the camera gives the same recipe', () => {
+  const r = { ...defaultRecipe('Round Trip'), style: 'deep' as const, saturation: 2, contrast: -1, whiteBalance: 6300, amberBlue: 3, greenMagenta: -2, exposureThirds: -4, dro: 3 as const, effect: 'posterization' as const, effectOption: 'posterization-bw' };
+  const { recipe, unknown } = recipeFromCamera(stateAfter(r), 'Round Trip');
+  assert.deepEqual(unknown, []);
+  assert.deepEqual(recipe, r);
+});
+
+test('a WB preset the format cannot name becomes "keep"; missing look is reported', () => {
+  const s = stateAfter(defaultRecipe());
+  s.whiteBalance = 'shade';
+  delete s.look;
+  const { recipe, unknown } = recipeFromCamera(s, 'X');
+  assert.equal(recipe.whiteBalance, 'keep');
+  assert.equal(unknown.length, 1);
+});
+
+test('snapshot restores what the camera had', () => {
+  const s = stateAfter({ ...defaultRecipe(), style: 'vivid', whiteBalance: 4800 });
+  const snap = lookSnapshot(s);
+  assert.equal(snap.creativeStyle, 'vivid');
+  assert.equal(snap.colorTemperature, 4800);
+  assert.equal(snap.whiteBalance, 'color-temp');
+});
+
+test('swatches: mono is grey, warm WB is warmer than cool WB', () => {
+  const [, mid] = swatchColors({ ...defaultRecipe(), style: 'mono' });
+  assert.equal(mid.slice(1, 3), mid.slice(3, 5));
+  const red = (hex: string) => parseInt(hex.slice(1, 3), 16) - parseInt(hex.slice(5, 7), 16);
+  assert.ok(red(swatchColors({ ...defaultRecipe(), whiteBalance: 9000 })[1]) > red(swatchColors({ ...defaultRecipe(), whiteBalance: 3000 })[1]));
+});
