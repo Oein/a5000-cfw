@@ -14,3 +14,9 @@ hello/HELLO: hello/hello.cpp
 sdcom/SDPROBE: sdcom/sdprobe.cpp sdcom/sdcom.h
 	$(CXX) $(CFLAGS) -fno-exceptions -c -o sdcom/sdprobe.o sdcom/sdprobe.cpp
 	$(CXX) $(LDFLAGS) -o $@ sdcom/sdprobe.o -lsdcom -losal_uipc -lpthread $(LIBS)
+
+# sdctl: 디버그 제어 CLI. A5K_DEBUG_API 정의 시 SET(모드/파라미터 변경) 활성.
+# 정의 없이 빌드하면 query 전용(배포본에선 플래그 빼면 됨).
+sdcom/SDCTL: sdcom/sdctl.cpp sdcom/sdcom.h
+	$(CXX) $(CFLAGS) -DA5K_DEBUG_API -fno-exceptions -c -o sdcom/sdctl.o sdcom/sdctl.cpp
+	$(CXX) $(LDFLAGS) -o $@ sdcom/sdctl.o -lsdcom -losal_uipc -lpthread $(LIBS)
