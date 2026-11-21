@@ -22,6 +22,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <csignal>
+#include <climits>
 #include <unistd.h>
 #include "sdcom.h"
 
@@ -117,6 +118,29 @@ static void doGet(SDComIPC *ipc, int want = -1) {
     sendMsg(ipc, MSG_GET_PARAMS, 0, 0, 0, want);
 }
 
+// 0x1002에서 paramId 하나의 Int 값만 조용히 읽음. 없거나 비-Int면 INT_MIN.
+static int getParamValue(SDComIPC *ipc, int paramId) {
+    unsigned int tx = 0;
+    ipc->createNewTransactionId(&tx);
+    SDComMsg *msg = SDComMsgUtil::createNewMessage(SCALARDAEMON_QUEUE, SDCOM_MSG_REQUEST, tx);
+    SDComMsgUtil::setMessageId(msg, MSG_GET_PARAMS);
+    SDComMsg *rep = NULL;
+    int out = INT_MIN;
+    if (ipc->sendSync(msg, &rep, 5) == 0 && rep) {
+        int n = SDComMsgUtil::getNumOfParams(rep);
+        for (int i = 0; i < n; i++) {
+            SDComMsgParam *p = (i == 0) ? SDComMsgUtil::getFirstParam(rep, true) : SDComMsgUtil::getNextParam(rep, true);
+            if (!p) break;
+            if ((int)p->getId() == paramId && p->getType() == 1)
+                out = static_cast<SDComMsgIntParam *>(p)->getData();
+            delete p;
+        }
+        SDComMsgUtil::freeMessage(rep, false);
+    }
+    SDComMsgUtil::freeMessage(msg, false);
+    return out;
+}
+
 // ---- named set 키 → 0x1003 paramId (docs/RE/sdcom/0003, 0006 측정값) ----
 struct NamedParam { const char *name; int paramId; const char *note; };
 static const NamedParam kNamed[] = {
@@ -156,6 +180,43 @@ static void doList() {
 }
 
 #ifdef A5K_DEBUG_API
+// 0x1003 {52=0, paramId=value} 를 조용히(로그 최소) 전송. rc 반환.
+static int quietSet(SDComIPC *ipc, int paramId, int value) {
+    unsigned int tx = 0;
+    ipc->createNewTransactionId(&tx);
+    SDComMsg *msg = SDComMsgUtil::createNewMessage(SCALARDAEMON_QUEUE, SDCOM_MSG_REQUEST, tx);
+    SDComMsgUtil::setMessageId(msg, MSG_SET_PARAMS);
+    unsigned short ids[2] = { (unsigned short)SETPARAMS_FIRST_ID, (unsigned short)paramId };
+    int           vs[2]  = { 0,                                   value };
+    for (int i = 0; i < 2; i++) {
+        SDComMsgIntParam *ip = new SDComMsgIntParam(ids[i], vs[i]);  // sizeof==0x10
+        SDComMsgUtil::addParam(msg, ip);
+        delete ip;
+    }
+    SDComMsg *rep = NULL;
+    int rc = ipc->sendSync(msg, &rep, 5);
+    if (rep) SDComMsgUtil::freeMessage(rep, false);
+    SDComMsgUtil::freeMessage(msg, false);
+    return rc;
+}
+
+// set-value v 를 0..maxVal 까지 쓸어넣고 매번 get read-back → set↔get 매핑표 추출.
+// 한 connect로 수행, settle 350ms. 끝나면 원래 값으로 복구. (휘발/브릭0)
+static void doSweep(SDComIPC *ipc, int paramId, int maxVal) {
+    int orig = getParamValue(ipc, paramId);
+    printf("sweep param %d (orig get=%d), set 0..%d:\n", paramId, orig, maxVal);
+    for (int v = 0; v <= maxVal; v++) {
+        int rc = quietSet(ipc, paramId, v);
+        usleep(350000);
+        int got = getParamValue(ipc, paramId);
+        printf("  set %2d -> rc=%d get=%d%s\n", v, rc, got,
+               (rc == 0 && got != INT_MIN && got != v) ? "  (remap)" : (rc != 0 ? "  (reject)" : ""));
+        fflush(stdout);
+    }
+    if (orig != INT_MIN) { quietSet(ipc, paramId, orig); usleep(350000);
+        printf("restored param %d -> set %d (get=%d)\n", paramId, orig, getParamValue(ipc, paramId)); }
+}
+
 // 0x1003 {52=0, paramId=value} → 2초 대기 → 0x1002로 그 paramId 되읽기(반영 확인).
 static int doSet(SDComIPC *ipc, int paramId, int value) {
     printf("SET param %d = %d (0x1003)\n", paramId, value);
@@ -181,7 +242,7 @@ static void usage() {
     printf("usage: sdctl <componentId> <cmd> [args]\n");
     printf("  get | list | msg <id>[:p=v,...] ...\n");
 #ifdef A5K_DEBUG_API
-    printf("  set <paramId> <value> | <name> <value> | shift-shutter|shift-aperture|shift-pl|shift-focus <n>\n");
+    printf("  set <paramId> <value> | <name> <value> | sweep <paramId> [maxVal] | shift-shutter|shift-aperture|shift-pl|shift-focus <n>\n");
     printf("  (SET 활성: A5K_DEBUG_API)\n");
 #else
     printf("  (SET 비활성: query 전용. set을 쓰려면 -DA5K_DEBUG_API)\n");
@@ -236,6 +297,9 @@ int main(int argc, char **argv) {
 #ifdef A5K_DEBUG_API
         if (!strcmp(cmd, "set") && argc >= 5) {
             ret = doSet(ipc, (int)strtol(argv[3], 0, 0), (int)strtol(argv[4], 0, 0));
+        } else if (!strcmp(cmd, "sweep") && argc >= 4) {
+            int maxv = (argc >= 5) ? (int)strtol(argv[4], 0, 0) : 24;
+            doSweep(ipc, (int)strtol(argv[3], 0, 0), maxv);
         } else if (!strcmp(cmd, "shift-shutter") && argc >= 4) {
             ret = doShift(ipc, MSG_SHIFT_SHUTTER, 5, (int)strtol(argv[3], 0, 0));
         } else if (!strcmp(cmd, "shift-aperture") && argc >= 4) {
