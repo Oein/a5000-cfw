@@ -19,9 +19,9 @@ a5000의 순정 UI를 더 나은 커스텀 UI로 교체하되 모든 기능을 �
 | [backup](backup/README.md) | Backup.bin Tier A/B/C, propId 6개 실측, 제브라 SDCom 불가 | CVPDM 그룹 쓰기는 settings |
 | [boot](boot/README.md) | 파티션/부팅 체인, 공장 WBI 상시 재개, dmode+env.txt 자동실행, 복구 불변식, **warm-boot 복원·에뮬 SS모드(0005)** | ⚠️ **LD_PRELOAD 자동실행은 warm 재개서 안 걸림 → route-b 주입이 견고** |
 | [persistence](persistence/README.md) | **cold-boot 생존 패치 타당성(0001)** — a5000 코드 서명 없음, LD_PRELOAD가 1순위 | 최고 벽돌위험 경로 조사(절차서 아님) |
-| [memory](memory/README.md) | **RAM 풋프린트/트림(0001)** — Linux 175.8MB, 회수가능 ~48MB, 진짜 위험=OOM시 im.elf가 먼저 죽음(oom_adj=0) | 우리 UI +9.8MB → ~3MB 감량 가능 |
+| [memory](memory/README.md) | **RAM 풋프린트/트림(0001)** — Linux 175.8MB, 회수가능 ~48MB, 진짜 위험=OOM시 im.elf가 먼저 죽음(oom_adj=0) · **실기확정(§9): im.elf RSS 47MB·oom_adj=0, Android 전부 −16** | 우리 UI +9.8MB → ~3MB 감량 가능 |
 | [playback](playback/README.md) | **동영상 재생(0001)·RAW 갤러리 썸네일(0002)** — 재생영상=ch51(라이브뷰 평면), RAW는 매립 JPEG 디코드(재현상 아님) | 정지=우리 직접디코드(구현됨), 동영상=순정 트리거+ch53 오버레이 |
-| [network](network/README.md) | **AF→WiFi 끊김(0001)** — 의도적 아님, PREEMPT_RT 스케줄링 기아(Wi-Fi가 우선순위 맨 아래) | RAM-only 수리 가능(IRQ affinity·ksdioirqd 승격), 실기 계측 1회 필요 |
+| [network](network/README.md) | **AF→WiFi 끊김(0001)** — 의도적 아님, PREEMPT_RT 스케줄링 기아 · **실기 정적확정(§9): im.elf RR 71개(6~123) > ksdioirqd FIFO1, WiFi IRQ221=CPU0 동거** | RAM-only 수리 가능(IRQ affinity·ksdioirqd 승격); 남은 건 라이브뷰 부하 동적 A/B(대면) |
 | [shooting](shooting/README.md) | **드라이브/릴리즈(0001)·룩/화질/WB(0002)** — 제어면 param 256~388, set=`CameraSetParameters 0x1003` | 순정 전기능 켜기 OK, 새 룩/이펙트 주입 불가(Artfilter/ColorMode 독점) |
 | [focus](focus/README.md) | **초점 시스템(0001)** — AF모드(CVPDM g13)·영역(g187)·스팟(g188)·트리거(S1/0x1006)·확대·MF어시스트·피킹 | 데이터면=엔진 소유, 모드/영역은 route-b 배선·검증됨 |
 | [movie](movie/README.md) | **녹화(0001)·SteadyShot/줌(0002)** — Movie팩토리 0x3000/02/03, H.264=SA DSP ZIMA, 바디IS 없음, 줌 3종 ch51 | 전부 패스스루(SDCom 토글+ch53 오버레이) |
