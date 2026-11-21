@@ -16,11 +16,17 @@ ARCH    := -march=armv7-a -mthumb -mfpu=vfpv3-d16 -mfloat-abi=softfp
 CXXFLAGS := $(ARCH) -Os -Wall -fPIC -fno-exceptions -fno-rtti -fno-stack-protector \
             -U_FORTIFY_SOURCE -DUICORE_ASSETS_MMAP \
             -I$(UICORE)/include -I.
+# Debug build: make DEBUG=1 -> -DA5K_DEBUG (in-app dbgcmd/dbgout channel), separate output dir.
+ifeq ($(DEBUG),1)
+CXXFLAGS += -DA5K_DEBUG
+OUT := build-debug
+else
+OUT := build
+endif
 LDFLAGS := $(ARCH) -shared -fPIC -static-libstdc++ -static-libgcc \
            -Wl,--hash-style=sysv -Wl,-soname,a5kinproc.so
 LDLIBS  := -lpthread -lm
 
-OUT     := build
 OBJDIR  := $(OUT)/obj
 TARGETSO:= $(OUT)/a5kinproc.so
 
@@ -34,7 +40,7 @@ UICORE_SRCS := \
   src/model/menu_gen.cpp src/model/apply.cpp src/model/apply_gen.cpp
 
 # this backend + reused a5000 data/sys
-LOCAL_SRCS  := inproc.cpp display_osd.cpp display_rigel.cpp input_createevent.cpp camera_inproc.cpp playback_inproc.cpp actions_inproc.cpp
+LOCAL_SRCS  := debug_channel.cpp inproc.cpp display_osd.cpp display_rigel.cpp input_createevent.cpp camera_inproc.cpp playback_inproc.cpp actions_inproc.cpp
 CLOCAL_SRCS := nanojpeg.c            # baseline JPEG decoder (MIT, compiled as C)
 REUSE_SRCS  := $(NATIVE)/platform/a5000/keymap.cpp $(NATIVE)/platform/a5000/sys_a5000.cpp
 
@@ -68,4 +74,4 @@ $(TARGETSO): $(UICORE_OBJS) $(LOCAL_OBJS) $(CLOCAL_OBJS) $(REUSE_OBJS)
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 clean:
-	rm -rf build
+	rm -rf build build-debug

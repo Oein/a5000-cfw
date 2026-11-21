@@ -434,6 +434,9 @@ public:
 
     // Non-setting menu action (app launch / stock action view). Forwards to actions_inproc.cpp.
     // Brick-0: RAM/mount only, never Backup/flash/NAND.
+#ifdef A5K_DEBUG
+    a5kinproc::SdcomClient *debugSdcom() { return &sdcom_; }
+#endif
     int systemAction(int kind, const char *arg) { return a5kinproc::runSystemAction(eng_, kind, arg); }
 
     bool connect()        { connected_ = eng_ && eng_->ok(); return connected_; }
@@ -1155,4 +1158,7 @@ void runFocusTest(CameraControl *cam, Engine *eng) {
 // The image-aspect self-test (§18) is driven directly through the Engine from
 // inproc.cpp, so the adapter only needs the factory here.
 uicore::CameraControl *createInprocCamera(Engine *eng) { return new InprocCamera(eng); }
+#ifdef A5K_DEBUG
+SdcomClient *debugSdcom(uicore::CameraControl *cam) { return cam ? static_cast<InprocCamera *>(cam)->debugSdcom() : 0; }
+#endif
 }

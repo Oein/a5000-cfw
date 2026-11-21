@@ -1,6 +1,8 @@
 # custom-binary-app (route-b a5kinproc.so) build outputs & scratch
 build/
 **/build/
+build-debug/
+**/build-debug/
 *.o
 *.a
 **/.gradle/

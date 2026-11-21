@@ -45,6 +45,7 @@ void                   stockShooting_begin(Engine *eng);      // route-b: hand s
 void                   stockShooting_end();                   // route-b: re-engage our UI (menu)
 uicore::Input         *createCreateEventInput(Engine *eng);   // §21 engine-input hook
 uicore::CameraControl *createInprocCamera(Engine *eng);
+void                   startDebugChannel(uicore::CameraControl *cam, Engine *eng);   // no-op unless A5K_DEBUG
 uicore::Media         *createInprocMedia();                   // M3 playback: DCF card gallery (READ-ONLY)
 }
 // ---- reused a5000 platform pieces (data + generic sys) ----
@@ -257,6 +258,7 @@ void *worker(void *) {
     // env), so a bare manual inject can prove the SET->engine route. RAM-only, reversible.
     if (env_int("A5K_UI_FOCUSTEST", 0) || access("/android/a5k/focustest", F_OK) == 0)
         a5kinproc::runFocusTest(plat.camera, &eng);
+    a5kinproc::startDebugChannel(plat.camera, &eng);           // stub unless built with DEBUG=1
     plat.clock   = a5000::createClock();
     plat.log     = log;
     plat.storage = 0;
