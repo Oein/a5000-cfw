@@ -19,9 +19,9 @@ UI 베이스: [sony-remote-reboot/viewer](https://github.com/Oein/sony-remote-re
 - **EXIF는 카메라가 쓴다.** 폰은 사진 파일을 건드리지 않는다.
 - 흐름: 카메라가 촬영 → `gps.request {reqId, shotId, capturedAt}` → 폰이 `gps.response {reqId, source, fix}` → 카메라가 그 사진 EXIF에 기록.
 - 응답 선택(`geotag/answer.ts`, 순수 함수·테스트됨):
-  1. **live**: 최신 fix가 촬영 시각 ±60초 이내 & 정확도 ≤200m
-  2. **track**: 폰의 위치 기록에서 촬영 시각 보간(±5분 보간, 10분 넘으면 없음)
-  3. **none**: 위 둘 다 없음. 방금 찍은 사진(2분 이내)만 OS에 새 fix를 요청(최대 8초) 후 재시도.
+  1. **위치 기록(track)에서 촬영 시각 위치**(±5분 보간, 10분 넘게 떨어지면 없음) — 최신 fix보다 우선. 촬영 직후 폰이 이동했으면 최신 fix는 이미 다른 곳이기 때문. 방금 찍은 사진이면 `live`, 재연결 후 묻는 예전 사진이면 `track`으로 표시.
+  2. 기록이 없으면(포그라운드 전용 모드 등) **최신 fix**가 촬영 ±60초 이내 & 정확도 ≤200m일 때.
+  3. **none**. 방금 찍은 사진(2분 이내)만 OS에 새 fix를 요청(최대 8초) 후 재시도. `reason`에 이유(트랙 읽기 실패 포함).
 - **연결이 끊긴 동안 찍은 사진**: 카메라가 요청을 큐에 쌓아뒀다가 재연결 시 원래 `capturedAt`으로 다시 묻는다 → 폰은 track으로 답한다. 그래서 카메라가 범위 밖이어도 폰은 저전력으로 위치 기록을 계속한다.
 - **시계**: 카메라는 타임존이 없다(벽시계를 UTC처럼 읽은 epoch ms). `hello.clock`으로 `offset = cameraClock − phoneUtc`를 측정해 타임존+드리프트를 한 번에 보정(`trackMath.ts`).
 - 위치 기록은 폰에만(`Documents/track/YYYY-MM-DD.jsonl`, 보관 기간 설정, 기본 14일). 카메라에는 사진 한 장의 위치만 간다.
@@ -90,9 +90,19 @@ viewer의 촬영 화면 그대로: 라이브뷰, 셔터/반셔터/AF, 줌, MF·�
 ---
 
 ## 테스트 / 검증
+
+### 시뮬레이터 실측 (iPhone 18 Pro, 2026-11-21)
+| 시나리오 | 결과 |
+|---|---|
+| 포그라운드 촬영 | `EXIF ← shot 13: 37.566500, 126.978000 ±5m (live)` |
+| 앱 백그라운드(홈) 후 촬영 | `shot 14: 37.570000, 126.982000 (live)` — 백그라운드에서 이벤트 수신·응답 |
+| 카메라 재시작 → 백그라운드 앱 자동 재연결 | `phone hello background=true` |
+| 백그라운드 + 범위 이탈(`/mock/offline`) 중 위치 A에서 촬영 → B로 이동 → 재연결 | `shot 13: 37.591867, 127.001867 (track)` — 큐 재요청에 **촬영 시점** 위치(A→B 보간)로 답함, 이동 후 위치 아님 |
+| Live Activity | 잠금화면에 카메라·연결·배터리·위치 장수·정확도·마지막 사진 표시 |
+
 - `npm test`: 순수 로직 22개 — GPS 응답 선택, 트랙 보간, 시계 오프셋, 이벤트 파싱, 백오프, 레시피 YAML·공유코드(Recipe Lab 공개 벡터)·카메라 매핑.
 - `npm run mock`: mock 카메라. HTTP v0 + v0+ 이벤트(촬영→`photo.added`+`gps.request`, 폰 없을 때 큐→재연결 시 재요청, `EXIF ←` 로그). `GET /api/photos/<id>`의 `gps`로 "카메라가 기록한 위치" 확인.
-- iOS 시뮬레이터: Features › Location으로 위치 시뮬레이션, 앱 백그라운드 후 `curl -XPOST localhost:8080/api/camera/shutter`로 촬영 → mock 로그에 `EXIF ←`가 찍히면 백그라운드 GPS 응답 동작.
+- iOS 시뮬레이터: `xcrun simctl location booted set <lat>,<lon>`으로 위치, 앱 백그라운드 후 `curl -XPOST localhost:8080/api/camera/shutter`로 촬영 → mock 로그에 `EXIF ←`가 찍히면 백그라운드 GPS 응답 동작. 범위 이탈은 `curl -XPOST 'localhost:8080/mock/offline?seconds=40'`.
 
 ## 남은 것 / 열린 질문
 - 실제 CFW 프로토콜(PROTOCOL.md "CFW 요구사항").

@@ -1,11 +1,13 @@
 /**
  * Choosing the position to answer a camera's gps.request with. Pure (runs under `node --test`).
  *
- *  1. live  — the latest fix, if it is within LIVE_WINDOW_MS of the shot and accurate enough;
- *  2. track — the recorded track around the shot (shots taken while the link was down are asked
- *             for again on reconnect, so this is the normal path for them);
- *  3. none  — nothing close enough. The caller may then ask the OS for a fresh fix, but only for
- *             a shot taken just now (a fresh fix says nothing about where an old shot was).
+ *  1. the recorded track at the shot's time (interpolated) — first, because the latest fix may
+ *     already be somewhere else (the phone moved after the shot). Labelled "live" for a shot
+ *     taken just now, "track" for an older one (asked again after a reconnect);
+ *  2. the latest fix, if within LIVE_WINDOW_MS of the shot — when the track has nothing (the
+ *     foreground-only mode keeps no track, or a write failed);
+ *  3. none — nothing close enough. The caller may then ask the OS for a fresh fix, but only for
+ *     a shot taken just now (a fresh fix says nothing about where an old shot was).
  */
 
 import { DEFAULT_MATCH, photoUtc, type MatchOptions, type TrackPoint } from './trackMath.ts';
@@ -32,11 +34,14 @@ export function chooseAnswer(
   // Without a measured offset assume the shot is "now": requests normally come right after a shot
   const shotUtc = clockOffsetMs === null ? now : photoUtc(capturedAtCamera, clockOffsetMs);
   const recent = Math.abs(now - shotUtc) <= FRESH_FIX_WINDOW_MS;
+  const justNow = Math.abs(now - shotUtc) <= LIVE_WINDOW_MS;
+  const fromTrack = track(shotUtc, DEFAULT_MATCH);
+  if (fromTrack && accurate(fromTrack)) {
+    return { source: justNow ? 'live' : 'track', fix: wire(fromTrack), shotUtc, mayWaitForFix: false };
+  }
   if (latest && accurate(latest) && Math.abs(latest.t - shotUtc) <= LIVE_WINDOW_MS) {
     return { source: 'live', fix: wire(latest), shotUtc, mayWaitForFix: false };
   }
-  const fromTrack = track(shotUtc, DEFAULT_MATCH);
-  if (fromTrack && accurate(fromTrack)) return { source: 'track', fix: wire(fromTrack), shotUtc, mayWaitForFix: false };
   return {
     source: 'none',
     fix: null,

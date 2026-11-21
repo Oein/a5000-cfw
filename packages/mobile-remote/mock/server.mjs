@@ -5,7 +5,7 @@ import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { networkInterfaces } from 'node:os';
 
-import { attachEvents, gpsAnswerFor, shotTaken } from './events.mjs';
+import { attachEvents, goOffline, gpsAnswerFor, shotTaken } from './events.mjs';
 
 const PORT = Number(process.env.PORT ?? 8080);
 const samples = new URL('./samples/', import.meta.url);
@@ -140,6 +140,11 @@ const server = createServer(async (req, res) => {
   const post = req.method === 'POST';
   console.log(req.method, req.url);
   try {
+    // Test hook: POST /mock/offline?seconds=60 — camera out of range (event channel down)
+    if (path === '/mock/offline' && post) {
+      goOffline(Number(url.searchParams.get('seconds') ?? 60) * 1000);
+      return json(res, 200, { ok: true });
+    }
     if (path === '/api/info') {
       return json(res, 200, { app: 'ilce-remote', appVersion: 'mock', model: 'ILCE-5000', firmware: '1.10', pmcaApi: 3, android: '2.3.7', clock: cameraClock() });
     }

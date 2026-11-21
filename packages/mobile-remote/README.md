@@ -20,7 +20,9 @@ npm run samples          # mock 샘플 이미지 생성 (macOS, swift)
 npm run mock             # mock 카메라 :8080 (HTTP + ws 이벤트)
 EXPO_PUBLIC_CAMERA_HOST=127.0.0.1 npx expo run:ios   # dev build (Expo Go 불가: 네이티브 모듈)
 ```
-mock에서 촬영 시뮬레이션: `curl -XPOST localhost:8080/api/camera/shutter` → 로그에 `EXIF ← shot N: lat, lon` 이 찍히면 GPS 응답 동작.
+⚠️ `CI=1`로 띄운 Metro는 파일 감시를 하지 않아 수정이 반영되지 않는다 — 개발 중엔 `npx expo start`를 따로 띄울 것.
+
+mock에서 촬영 시뮬레이션: `curl -XPOST localhost:8080/api/camera/shutter` → 로그에 `EXIF ← shot N: lat, lon` 이 찍히면 GPS 응답 동작. 범위 이탈 시뮬레이션: `curl -XPOST 'localhost:8080/mock/offline?seconds=40'`.
 
 검사: `npm test` (순수 로직), `npm run typecheck`, `npx expo lint`.
 

@@ -287,10 +287,12 @@ function onLocations(points: TrackPoint[]) {
 async function answerGps(e: Extract<CameraEvent, { type: 'gps.request' }>) {
   const now = Date.now();
   const offset = prefs?.clockOffsetMs ?? null;
+  let trackError: string | null = null;
   const lookup = (utc: number) => {
     try {
       return findPosition(utc);
-    } catch {
+    } catch (err) {
+      trackError = String(err instanceof Error ? err.message : err);
       return null;
     }
   };
@@ -302,7 +304,9 @@ async function answerGps(e: Extract<CameraEvent, { type: 'gps.request' }>) {
       answer = chooseAnswer(e.capturedAt, offset, fix, lookup, Date.now());
     }
   }
-  const sent = link?.send({ type: 'gps.response', reqId: e.reqId, source: answer.source, fix: answer.fix, reason: answer.reason }) ?? false;
+  // reason also carries a track read failure (diagnostics on the camera side)
+  const reason = [answer.reason, trackError && `track: ${trackError}`].filter(Boolean).join('; ') || undefined;
+  const sent = link?.send({ type: 'gps.response', reqId: e.reqId, source: answer.source, fix: answer.fix, reason }) ?? false;
   if (!sent) return; // the camera asks again after reconnecting
   const tagged = answer.fix !== null;
   set({

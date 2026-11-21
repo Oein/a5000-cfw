@@ -23,6 +23,13 @@ test('shot taken while disconnected answered from the track', () => {
   assert.equal(a.fix?.t, NOW - 3570_000);
 });
 
+test('phone moved after the shot: the track position at the shot time wins over the latest fix', () => {
+  const moved = [p(NOW - 40_000), { ...p(NOW - 10_000), lat: 40 }];
+  const a = chooseAnswer(NOW - 40_000 + KST, KST, moved[1], (utc) => positionAt(moved, utc), NOW);
+  assert.equal(a.source, 'live');
+  assert.equal(a.fix?.lat, 37.5);
+});
+
 test('inaccurate live fix is not used; recent shot may wait for a fix', () => {
   const a = chooseAnswer(NOW + KST, KST, p(NOW, 900), lookup, NOW);
   assert.equal(a.source, 'none');

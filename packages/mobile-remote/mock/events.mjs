@@ -10,6 +10,15 @@ const clients = new Set();
 const pendingGps = new Map(); // reqId -> request
 const answered = new Map(); // shotId -> response
 let battery = 100;
+let offlineUntil = 0;
+
+/** Simulates the camera going out of range: drops phones and refuses them for ms. */
+export function goOffline(ms) {
+  offlineUntil = Date.now() + ms;
+  for (const s of clients) s.destroy();
+  clients.clear();
+  console.log(`events: OFFLINE for ${Math.round(ms / 1000)} s (shots queue their GPS requests)`);
+}
 
 function frame(text) {
   const payload = Buffer.from(text);
@@ -58,6 +67,7 @@ function parseFrames(buf, onClose) {
 export function attachEvents(server, { model, clock }) {
   server.on('upgrade', (req, socket) => {
     if (new URL(req.url, 'http://x').pathname !== '/api/events') return socket.destroy();
+    if (Date.now() < offlineUntil) return socket.destroy();
     const key = req.headers['sec-websocket-key'];
     const accept = createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
@@ -106,7 +116,7 @@ function onMessage(socket, text) {
     const f = m.fix;
     console.log(
       f
-        ? `EXIF ← shot ${req.shotId}: ${f.lat.toFixed(6)}, ${f.lon.toFixed(6)} ±${f.acc ?? '?'}m (${m.source})`
+        ? `EXIF ← shot ${req.shotId}: ${f.lat.toFixed(6)}, ${f.lon.toFixed(6)} ±${f.acc ?? '?'}m (${m.source})${m.reason ? ` [${m.reason}]` : ''}`
         : `EXIF ← shot ${req.shotId}: no position (${m.reason})`,
     );
   }
