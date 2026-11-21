@@ -9,10 +9,12 @@
 | 0003 | [카메라 파라미터와 Shift 명령](0003.%20camera-parameters-and-shift-commands.md) | observed (Get/ShiftShutter) |
 | 0004 | [이벤트 구독과 수신 분기](0004.%20event-subscription-and-dispatch.md) | derived, id 왕복 미확인 |
 | 0005 | [클라이언트 안전 규칙과 사고](0005.%20client-safety-rules-and-incident.md) | observed |
+| 0006 | [실기 측정 파라미터 enum 도메인](0006.%20device-measured-parameter-enums.md) | observed (0x1002 116 / 0x100A 155 / movie·audio 실기) |
 
 ## 열린 항목
 - standalone 프로세스에서 D2A/state 5 획득 (트랙 B 최우선 실기 프로브)
 - 이벤트 id 왕복 실측, 프리뷰 프레임 pull 가능 여부
 - Superior Auto exposureMode 수치
+- 순정 다이얼 모드별 0x100A 재덤프 → flash/driveMode/selfTimer/steadyShot 전체 도메인 확정 (0006 §9)
 
 원본 TSV(메시지 id, 요청 파라미터, 카메라 파라미터, 이벤트 표)와 sdprobe 실행 로그는 `packages/data/re/`(비공개).
