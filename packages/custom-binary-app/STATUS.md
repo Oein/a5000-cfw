@@ -22,3 +22,7 @@
 ## 레이아웃
 - `uicore/` — 플랫폼 무관 UI 코어(canvas, gfx, screens, model). `platform/a5000-inproc/` — route-b 어댑터(display_rigel, input_createevent, camera_inproc, engine.h, actions). `platform/host/` — 호스트 시뮬레이터.
 - `sysroot*`, `toolchain*`, `aosp/` 등 빌드 입력 일부는 gitignore(펌웨어 파생/재획득).
+
+## 디버그 도구 (2026-11-21)
+- **sdctl** (`sdcom/sdctl.cpp`, standalone, `#ifdef A5K_DEBUG_API`): SDCom get/set/sweep. 실기 검증 — `mode N` 실제 변경, `sweep`로 set↔get 매핑 추출(exposureMode 0~24 대부분 자기사상, flash{0,1,2}, drive{0,1,3}, wb는 auto모드서 0잠김=모드의존).
+- **in-app 디버그 채널** (`platform/a5000-inproc/debug_channel.cpp`, `#ifdef A5K_DEBUG`, `build.sh a5000-inproc DEBUG=1`→`build-debug/`): a5kinproc 내부 스레드가 `/android/a5k/dbgcmd`→실행→`dbgout`. **실기 검증(192.168.10.181, 디버그 .so 주입)**: 채널 기동·`help`·**`setparam 263 → SR_OK`(SDCom 0x1003 수락)** 확인, 복구·teardown OK, im.elf 무크래시. 단 **in-proc 엔진 읽기(getparam/getgroup)는 track-A 앱 전경 컨텍스트에서 "read failed"** — a5kinproc Engine 미완전 init(순정 카메라 전경에서 재검증 필요). SDCom 경로는 컨텍스트 무관 동작.
