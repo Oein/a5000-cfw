@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useNavigation } from 'expo-router';
 import { useLayoutEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { Chips } from '@/components/Form';
 import { Segmented, Swatch } from '@/components/recipe/Controls';
 import { showActions } from '@/lib/actionSheet';
 import { useCamera } from '@/lib/CameraProvider';
@@ -10,15 +11,21 @@ import { colors } from '@/lib/theme';
 import { toast } from '@/lib/toast';
 import { applyWithFeedback, confirmDelete, newFromCamera, openDuplicate, openEditor, openShare } from '@/features/recipes/actions';
 import { EFFECT_LABELS, formatThirds, STYLE_LABELS, type Recipe } from '@/features/recipes/model';
-import { markApplied, toggleFavorite, useRecipes, type StoredRecipe } from '@/features/recipes/store';
+import { downloadRecipeLab, markApplied, packInfo, removeRecipeLab, toggleFavorite, useRecipes, type StoredRecipe } from '@/features/recipes/store';
 import { swatchColors } from '@/features/recipes/swatch';
 
-type Filter = 'all' | 'fav' | 'mine' | 'builtin';
-const FILTER_LABEL: Record<Filter, string> = { all: '전체', fav: '★ 즐겨찾기', mine: '내 레시피', builtin: '기본' };
+type Filter = 'all' | 'fav' | 'mine' | 'builtin' | 'lab';
+const FILTER_LABEL: Record<Filter, string> = { all: '전체', fav: '★', mine: '내 것', builtin: '기본', lab: 'Lab' };
+const ALL_BRANDS = '전체 브랜드';
+
+function fetchedText(t: number) {
+  const d = new Date(t);
+  return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()} 받음`;
+}
 
 /** Up to three short tags for a row. */
-function tags(r: Recipe) {
-  const t = [STYLE_LABELS[r.style]];
+function tags(r: Recipe & { brand?: string }) {
+  const t = r.brand ? [r.brand, STYLE_LABELS[r.style]] : [STYLE_LABELS[r.style]];
   if (r.effect !== 'off') t.push(EFFECT_LABELS[r.effect]);
   else if (typeof r.whiteBalance === 'number') t.push(`${r.whiteBalance}K`);
   if (r.exposureThirds) t.push(`${formatThirds(r.exposureThirds)}EV`);
@@ -37,12 +44,42 @@ export default function RecipesScreen() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [busy, setBusy] = useState<string | null>(null);
+  const [brand, setBrand] = useState(ALL_BRANDS);
+  const [downloading, setDownloading] = useState(false);
+  const pack = packInfo();
+  const brands = useMemo(() => [ALL_BRANDS, ...new Set(recipes.flatMap((r) => (r.brand ? [r.brand] : [])))], [recipes]);
+
+  const download = async () => {
+    setDownloading(true);
+    try {
+      const info = await downloadRecipeLab();
+      toast(`Recipe Lab 레시피 ${info.count}개${info.skipped ? ` (${info.skipped}개는 읽지 못함)` : ''}`);
+      setFilter('lab');
+    } catch (e) {
+      toast(`받지 못했어요: ${e instanceof Error ? e.message : String(e)}`, 'error');
+    }
+    setDownloading(false);
+  };
+  const managePack = () =>
+    showActions('Recipe Lab 레시피', [
+      { title: '다시 받기 (최신으로)', onPress: download },
+      {
+        title: '폰에서 지우기',
+        destructive: true,
+        onPress: () =>
+          Alert.alert('Recipe Lab 레시피를 지울까요?', '복사해 저장한 내 레시피는 그대로예요. 언제든 다시 받을 수 있어요.', [
+            { text: '취소', style: 'cancel' },
+            { text: '지우기', style: 'destructive', onPress: () => removeRecipeLab().then(() => setFilter('all')) },
+          ]),
+      },
+    ]);
 
   const create = () =>
     showActions('새 레시피', [
       { title: '빈 레시피에서 시작', onPress: () => router.push({ pathname: '/recipe/[id]', params: { id: 'new' } }) },
       ...(connected ? [{ title: '카메라 지금 설정으로 만들기', onPress: () => newFromCamera(client) }] : []),
       { title: '가져오기 (링크 · 파일 · 텍스트)', onPress: () => router.push('/recipe/import') },
+      { title: pack ? 'Recipe Lab 레시피 다시 받기' : 'Recipe Lab 레시피 받기', onPress: download },
     ]);
 
   useLayoutEffect(() => {
@@ -60,10 +97,11 @@ export default function RecipesScreen() {
     return recipes.filter((r) => {
       if (filter === 'fav' && !r.favorite) return false;
       if (filter === 'mine' && r.builtin) return false;
-      if (filter === 'builtin' && !r.builtin) return false;
-      return !q || r.name.toLowerCase().includes(q) || tags(r).join(' ').toLowerCase().includes(q);
+      if (filter === 'builtin' && (!r.builtin || r.pack)) return false;
+      if (filter === 'lab' && (!r.pack || (brand !== ALL_BRANDS && r.brand !== brand))) return false;
+      return !q || `${r.name} ${r.title ?? ''} ${tags(r).join(' ')}`.toLowerCase().includes(q);
     });
-  }, [recipes, query, filter]);
+  }, [recipes, query, filter, brand]);
 
   const applied = recipes.find((r) => r.id === appliedId) ?? null;
 
@@ -74,7 +112,7 @@ export default function RecipesScreen() {
   };
 
   const more = (r: StoredRecipe) =>
-    showActions(r.name, [
+    showActions(r.title ?? r.name, [
       ...(connected ? [{ title: '카메라에 적용', onPress: () => apply(r) }] : []),
       { title: r.builtin ? '편집 (사본으로 저장)' : '편집', onPress: () => openEditor(r) },
       { title: '복제', onPress: () => openDuplicate(r) },
@@ -104,7 +142,28 @@ export default function RecipesScreen() {
         <Ionicons name="search" size={16} color={colors.textDim} />
         <TextInput style={styles.search} value={query} onChangeText={setQuery} placeholder="이름·스타일 검색" placeholderTextColor={colors.textDim} autoCorrect={false} clearButtonMode="while-editing" />
       </View>
-      <Segmented values={['all', 'fav', 'mine', 'builtin'] as Filter[]} value={filter} onChange={setFilter} label={(f) => FILTER_LABEL[f]} />
+      <Segmented values={['all', 'fav', 'mine', 'builtin', 'lab'] as Filter[]} value={filter} onChange={setFilter} label={(f) => FILTER_LABEL[f]} />
+      {!pack && (filter === 'all' || filter === 'lab') ? (
+        <Pressable style={styles.packCard} onPress={download} disabled={downloading} accessibilityRole="button">
+          <Ionicons name="cloud-download-outline" size={26} color={colors.accent} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.packTitle}>Recipe Lab 레시피 받기</Text>
+            <Text style={styles.packText}>Fuji·Kodak·Ricoh·Leica 등 필름 룩 70여 개. GitHub(voxivoid/recipe-lab-sony-pmca)에서 받아 폰에 보관해요.</Text>
+          </View>
+          {downloading ? <ActivityIndicator color={colors.accent} /> : <Ionicons name="chevron-forward" size={18} color={colors.textDim} />}
+        </Pressable>
+      ) : null}
+      {pack && filter === 'lab' ? (
+        <>
+          <Chips values={brands} value={brand} onChange={setBrand} />
+          <Pressable style={styles.packMeta} onPress={managePack} hitSlop={6}>
+            <Text style={styles.packText}>
+              {`${pack.count}개 · ${fetchedText(pack.fetchedAt)} · 원작 voxivoid/Recipe Lab (GPL-3.0)`}
+            </Text>
+            {downloading ? <ActivityIndicator size="small" color={colors.accent} /> : <Text style={styles.packManage}>관리</Text>}
+          </Pressable>
+        </>
+      ) : null}
     </View>
   );
 
@@ -128,7 +187,7 @@ export default function RecipesScreen() {
             <View style={styles.itemText}>
               <View style={styles.nameRow}>
                 <Text style={styles.name} numberOfLines={1}>
-                  {item.name}
+                  {item.title ?? item.name}
                 </Text>
                 {item.favorite ? <Ionicons name="star" size={13} color={colors.accent} /> : null}
               </View>
@@ -161,7 +220,7 @@ export default function RecipesScreen() {
       ListEmptyComponent={
         <View style={styles.empty}>
           <Text style={styles.emptyText}>
-            {filter === 'fav' ? '즐겨찾기한 레시피가 없어요. 레시피를 길게 눌러 추가하세요.' : filter === 'mine' ? '아직 만든 레시피가 없어요.' : '찾는 레시피가 없어요.'}
+            {filter === 'fav' ? '즐겨찾기한 레시피가 없어요. 레시피를 길게 눌러 추가하세요.' : filter === 'mine' ? '아직 만든 레시피가 없어요.' : filter === 'lab' && !pack ? '' : '찾는 레시피가 없어요.'}
           </Text>
           {filter === 'mine' ? (
             <Pressable style={styles.emptyButton} onPress={create}>
@@ -198,6 +257,11 @@ const styles = StyleSheet.create({
   appliedPill: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 10, height: 32, borderRadius: 16, backgroundColor: colors.ok },
   appliedText: { color: '#000', fontWeight: '700', fontSize: 12 },
   disabled: { opacity: 0.35 },
+  packCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.accent, backgroundColor: colors.panel },
+  packTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  packText: { color: colors.textDim, fontSize: 12, lineHeight: 17, flexShrink: 1 },
+  packMeta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 4 },
+  packManage: { color: colors.accent, fontSize: 13, fontWeight: '600' },
   empty: { alignItems: 'center', padding: 32, gap: 14 },
   emptyText: { color: colors.textDim, textAlign: 'center', lineHeight: 20 },
   emptyButton: { paddingHorizontal: 18, height: 40, borderRadius: 20, backgroundColor: colors.accent, justifyContent: 'center' },

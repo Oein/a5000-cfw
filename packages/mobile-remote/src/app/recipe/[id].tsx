@@ -28,7 +28,7 @@ import {
   type Dro,
   type Recipe,
 } from '@/features/recipes/model';
-import { deleteRecipe, freeName, getRecipe, markApplied, saveRecipe, useRecipes } from '@/features/recipes/store';
+import { deleteRecipe, freeName, getRecipe, markApplied, saveRecipe, useRecipes, plainRecipe } from '@/features/recipes/store';
 import { swatchColors } from '@/features/recipes/swatch';
 import { useLivePreview } from '@/features/recipes/useLivePreview';
 
@@ -70,10 +70,7 @@ export default function RecipeScreen() {
         // fall through
       }
     }
-    if (stored) {
-      const { id: _i, builtin: _b, favorite: _f, ...r } = stored;
-      return r;
-    }
+    if (stored) return plainRecipe(stored);
     return defaultRecipe(freeName('My Recipe'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, draft, stored?.id]);

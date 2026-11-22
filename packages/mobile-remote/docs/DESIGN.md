@@ -38,6 +38,7 @@ UI 베이스: [sony-remote-reboot/viewer](https://github.com/Oein/sony-remote-re
 ### 3. 레시피
 - 모델/범위는 [Recipe Lab](https://github.com/voxivoid/recipe-lab-sony-pmca)의 공개 파일/링크 스펙(format 1·2, family `sony-creative-style`)을 따라 **상호 호환**: `.YML` 가져오기/내보내기, `recipelab.io/r#<code>` 공유 링크 encode/decode (그 레포의 공개 테스트 벡터로 검증).
 - **독립 구현**: Recipe Lab은 GPL-3.0 → 코드·76개 레시피 표는 포함하지 않는다. 기본 레시피는 우리 것 10개(순정 스타일 + 몇 가지 룩). 큰 라이브러리는 "가져오기"로.
+- **Recipe Lab 레시피 받기**(77개, Fuji·Kodak·Ricoh 등): 앱·레포에 넣지 않고, 사용자가 누르면 폰이 GitHub에서 그 레포의 `Recipes.java`를 받아 `recipeLab.ts`가 폰에서 읽는다(Java 문법: 상수·`GROUPS`·`new Recipe(...)` 행만 가정, 표 형식이 바뀌면 "읽지 못함"으로 실패). 저장은 AsyncStorage `recipes.pack.recipelab.v1`, 읽기 전용(편집=사본), id는 제목 기반이라 다시 받아도 즐겨찾기 유지. 카메라 이름 규칙(24자)에 안 맞는 제목은 괄호 부분을 떼서 카메라 이름으로 쓰고 목록엔 원제목 표시. 레시피 탭 "Lab" 필터 + 브랜드 칩, "관리"에서 다시 받기/지우기.
 - 적용: 레시피 → `CameraChanges`(v0+: creativeStyle/saturation/contrast/sharpness/pictureEffect/option/dro + WB/색온도/AB/GM + EV). 부호 변환 주의: 파일은 앰버·그린이 +, 카메라 링크는 AB=앰버(−)…블루(+), GM=그린(−)…마젠타(+) → 둘 다 뒤집음. B&W 포스터화는 파일 `posterization-bw` ↔ 런타임 `posterization-mono`.
 - 값 검증은 "고치지 않고 거부 + 이유"(Recipe Lab 규칙과 동일). 픽처 이펙트는 JPEG에서만 동작 경고.
 - 나중에 CFW 자체에도 넣을 기능 — 같은 YAML/공유코드 포맷을 쓰면 폰↔카메라 레시피 이동이 그대로 된다.
@@ -114,7 +115,7 @@ viewer의 촬영 화면 그대로: 라이브뷰, 셔터/반셔터/AF, 줌, MF·�
 | 백그라운드 + 범위 이탈(`/mock/offline`) 중 위치 A에서 촬영 → B로 이동 → 재연결 | `shot 13: 37.591867, 127.001867 (track)` — 큐 재요청에 **촬영 시점** 위치(A→B 보간)로 답함, 이동 후 위치 아님 |
 | Live Activity | 잠금화면에 카메라·연결·배터리·위치 장수·정확도·마지막 사진 표시 |
 
-- `npm test`: 순수 로직 22개 — GPS 응답 선택, 트랙 보간, 시계 오프셋, 이벤트 파싱, 백오프, 레시피 YAML·공유코드(Recipe Lab 공개 벡터)·카메라 매핑.
+- `npm test`: 순수 로직 29개 — GPS 응답 선택, 트랙 보간, 시계 오프셋, 이벤트 파싱, 백오프, 레시피 YAML·공유코드(Recipe Lab 공개 벡터)·카메라 매핑.
 - `npm run mock`: mock 카메라. HTTP v0 + v0+ 이벤트(촬영→`photo.added`+`gps.request`, 폰 없을 때 큐→재연결 시 재요청, `EXIF ←` 로그). `GET /api/photos/<id>`의 `gps`로 "카메라가 기록한 위치" 확인.
 - iOS 시뮬레이터: `xcrun simctl location booted set <lat>,<lon>`으로 위치, 앱 백그라운드 후 `curl -XPOST localhost:8080/api/camera/shutter`로 촬영 → mock 로그에 `EXIF ←`가 찍히면 백그라운드 GPS 응답 동작. 범위 이탈은 `curl -XPOST 'localhost:8080/mock/offline?seconds=40'`.
 

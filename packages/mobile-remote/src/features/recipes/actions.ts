@@ -8,7 +8,7 @@ import { applyWarnings } from './apply';
 import { applyRecipe } from './applyToCamera';
 import { recipeFromCamera } from './fromCamera';
 import type { Recipe } from './model';
-import { deleteRecipe, freeName, type StoredRecipe } from './store';
+import { deleteRecipe, freeName, plainRecipe, type StoredRecipe } from './store';
 
 /** Shared recipe actions for the list, the quick picker on the shooting screen, etc. */
 
@@ -30,13 +30,12 @@ export function openEditor(recipe: StoredRecipe) {
 }
 
 export function openDuplicate(recipe: Recipe) {
-  const { name, ...rest } = recipe;
-  const { id: _i, builtin: _b, favorite: _f, ...clean } = rest as Recipe & Partial<StoredRecipe>;
-  router.push({ pathname: '/recipe/[id]', params: { id: 'new', draft: JSON.stringify({ ...clean, name: freeName(name) }) } });
+  const clean = plainRecipe(recipe);
+  router.push({ pathname: '/recipe/[id]', params: { id: 'new', draft: JSON.stringify({ ...clean, name: freeName(clean.name) }) } });
 }
 
 export function openShare(recipe: Recipe) {
-  router.push({ pathname: '/recipe/share', params: { draft: JSON.stringify(recipe) } });
+  router.push({ pathname: '/recipe/share', params: { draft: JSON.stringify(plainRecipe(recipe)) } });
 }
 
 /** "Bottle" what the camera is set to now into a new recipe (opens the editor). */

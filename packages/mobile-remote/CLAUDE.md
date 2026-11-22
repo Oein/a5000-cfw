@@ -8,5 +8,5 @@
 - 백그라운드에서 도는 코드(session/geotag/sync/link)는 화면 마운트에 의존하지 않는다(번들 로드 시 `initSession()`; React hook은 UI용 구독만).
 - `A5kSessionAttributes.swift`는 `modules/a5k-live-activity/ios/`와 `targets/live-activity/` 두 벌 — 항상 같이 수정.
 - 순수 로직(`trackMath`, `answer`, `link/protocol`, `recipes/{model,yaml,shareCode,apply}`)은 RN import 금지, 상대 import는 `.ts` 확장자 포함(`node --test`로 실행).
-- Recipe Lab(GPL-3.0) 코드·레시피 표 복사 금지. 공개 스펙/테스트 벡터 기반 호환만.
+- Recipe Lab(GPL-3.0) 코드·레시피 표 복사 금지. 공개 스펙/테스트 벡터 기반 호환만. 레시피 표는 런타임에 GitHub에서 받아 폰에서 파싱(`recipes/recipeLab.ts`), 테스트 fixture도 직접 만든 가짜 값.
 - 의존성 설치: `npx expo install <pkg>` (`.npmrc` legacy-peer-deps).
