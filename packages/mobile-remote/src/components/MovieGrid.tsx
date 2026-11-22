@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -69,11 +70,14 @@ export function MovieGrid({ client, connected, width }: { client: CameraClient; 
       columnWrapperStyle={columns > 1 ? { gap: GAP } : undefined}
       contentContainerStyle={{ gap: GAP }}
       refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.text} />}
-      ListFooterComponent={
-        error ? (
-          <Text style={styles.error}>{error}</Text>
-        ) : (
-          <Text style={styles.count}>{total > 0 ? `동영상 ${total}개` : '동영상이 없어요'}</Text>
+      ListFooterComponent={error ? <Text style={styles.error}>{error}</Text> : total > 0 ? <Text style={styles.count}>{`동영상 ${total}개`}</Text> : null}
+      ListEmptyComponent={
+        error ? null : (
+          <View style={styles.empty}>
+            <Ionicons name="videocam-outline" size={44} color={colors.textFaint} />
+            <Text style={styles.emptyTitle}>동영상이 없어요</Text>
+            <Text style={styles.emptyText}>카메라로 찍은 동영상이 여기 나와요. 아래로 당기면 새로고침해요.</Text>
+          </View>
         )
       }
       renderItem={({ item }) => (
@@ -120,6 +124,9 @@ export function MovieGrid({ client, connected, width }: { client: CameraClient; 
 }
 
 const styles = StyleSheet.create({
+  empty: { alignItems: 'center', paddingTop: 120, paddingHorizontal: 40, gap: 8 },
+  emptyTitle: { color: colors.text, fontSize: 17, fontWeight: '600' },
+  emptyText: { color: colors.textDim, textAlign: 'center', lineHeight: 20 },
   list: { flex: 1, backgroundColor: colors.background },
   center: {
     flex: 1,

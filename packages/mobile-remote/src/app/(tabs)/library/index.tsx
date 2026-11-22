@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, SectionList, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { useCamera } from '@/lib/CameraProvider';
@@ -50,12 +50,15 @@ export default function LibraryScreen() {
     });
   }, [items, columns]);
 
+  // The spinner only for a pull (background syncs show in the status line, not as a spinner)
+  const [pulling, setPulling] = useState(false);
   const refresh = async () => {
     if (!connected) {
       toast('카메라에 연결되면 동기화돼요', 'info');
       return;
     }
-    const result = await syncOnce(client);
+    setPulling(true);
+    const result = await syncOnce(client).finally(() => setPulling(false));
     toast(result || '최신 상태', 'info');
   };
 
@@ -73,7 +76,7 @@ export default function LibraryScreen() {
       keyExtractor={(row) => row[0].key}
       stickySectionHeadersEnabled
       contentInsetAdjustmentBehavior="automatic"
-      refreshControl={<RefreshControl refreshing={status.running} onRefresh={refresh} tintColor={colors.accent} />}
+      refreshControl={<RefreshControl refreshing={pulling} onRefresh={refresh} tintColor={colors.textDim} />}
       ListHeaderComponent={
         <View style={styles.status}>
           <Ionicons name={connected ? 'cloud-done-outline' : 'cloud-offline-outline'} size={16} color={connected ? colors.ok : colors.textDim} />

@@ -171,8 +171,8 @@ export default function ImportScreen() {
         )}
       </ScrollView>
       <View style={styles.bar}>
-        <Pressable style={[styles.importButton, good.length === 0 && { opacity: 0.4 }]} disabled={good.length === 0} onPress={importAll}>
-          <Text style={styles.importText}>{good.length ? `${good.length}개 가져오기` : '가져올 레시피 없음'}</Text>
+        <Pressable style={[styles.importButton, good.length === 0 && styles.importDisabled]} disabled={good.length === 0} onPress={importAll}>
+          <Text style={[styles.importText, good.length === 0 && { color: colors.textFaint }]}>{good.length ? `${good.length}개 가져오기` : '가져올 레시피 없음'}</Text>
         </Pressable>
       </View>
     </View>
@@ -206,5 +206,6 @@ const styles = StyleSheet.create({
   cardSummary: { color: colors.textDim, fontSize: 12, marginTop: 2 },
   bar: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 16, paddingBottom: 28, backgroundColor: 'rgba(0,0,0,0.9)' },
   importButton: { height: 50, borderRadius: 12, borderCurve: 'continuous', backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  importDisabled: { backgroundColor: colors.raised },
   importText: { color: '#000', fontWeight: '700', fontSize: 16 },
 });

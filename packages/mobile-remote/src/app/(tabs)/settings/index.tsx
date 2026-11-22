@@ -22,6 +22,13 @@ export default function SettingsScreen() {
   const { host, setHost, connected, info } = useCamera();
   const session = useSession();
   const [draft, setDraft] = useState(host);
+  const [editing, setEditing] = useState(false);
+  // The saved address loads after the first render (and can change elsewhere): show it unless typing
+  const [shownHost, setShownHost] = useState(host);
+  if (host !== shownHost) {
+    setShownHost(host);
+    if (!editing) setDraft(host);
+  }
   const cache = useCacheInfo();
   // In landscape the notch is at a side: keep the content clear of it
   const insets = useSafeAreaInsets();
@@ -57,6 +64,8 @@ export default function SettingsScreen() {
             value={draft}
             onChangeText={setDraft}
             onSubmitEditing={() => apply(draft)}
+            onFocus={() => setEditing(true)}
+            onBlur={() => setEditing(false)}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="numbers-and-punctuation"

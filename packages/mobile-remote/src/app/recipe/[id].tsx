@@ -205,6 +205,7 @@ export default function RecipeScreen() {
   const previewLabel =
     !connected ? '카메라 연결 안 됨 — 미리보기 없음' : !previewOn ? '미리보기 꺼짐 (카메라는 원래 룩)' : preview.status === 'sending' ? '카메라에 보내는 중…' : preview.status === 'error' ? '미리보기 실패' : '실시간 미리보기 — 카메라에 반영 중';
 
+  const applyOff = !connected || busy || !!invalid;
   return (
     <View style={styles.screen}>
       {connected ? (
@@ -287,12 +288,13 @@ export default function RecipeScreen() {
       </ScrollView>
 
       <View style={[styles.bar, { paddingBottom: insets.bottom + 10 }]}>
-        <Pressable style={[styles.barButton, styles.barSecondary, (!dirty || !!invalid) && styles.disabled]} disabled={!dirty || !!invalid} onPress={save}>
+        {/* disabled looks grey, not a faded orange */}
+        <Pressable style={[styles.barButton, styles.barSecondary, ((!dirty && !isBuiltin) || !!invalid) && styles.disabled]} disabled={(!dirty && !isBuiltin) || !!invalid} onPress={save}>
           <Text style={styles.barSecondaryText}>{isBuiltin ? '내 레시피로 저장' : dirty ? '저장' : '저장됨'}</Text>
         </Pressable>
-        <Pressable style={[styles.barButton, styles.barPrimary, (!connected || busy || !!invalid) && styles.disabled]} disabled={!connected || busy || !!invalid} onPress={apply}>
-          <Ionicons name="color-wand" size={16} color="#000" />
-          <Text style={styles.barPrimaryText}>{busy ? '적용 중…' : '카메라에 적용'}</Text>
+        <Pressable style={[styles.barButton, applyOff ? styles.barOff : styles.barPrimary]} disabled={applyOff} onPress={apply}>
+          <Ionicons name={connected ? 'color-wand' : 'camera-outline'} size={16} color={applyOff ? colors.textFaint : '#000'} />
+          <Text style={[styles.barPrimaryText, applyOff && { color: colors.textFaint }]}>{busy ? '적용 중…' : connected ? '카메라에 적용' : '카메라 연결 안 됨'}</Text>
         </Pressable>
       </View>
     </View>
@@ -354,6 +356,7 @@ const styles = StyleSheet.create({
   },
   barButton: { flex: 1, height: 48, borderRadius: 12, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
   barPrimary: { backgroundColor: colors.accent },
+  barOff: { backgroundColor: colors.raised },
   barPrimaryText: { color: '#000', fontWeight: '700', fontSize: 16 },
   barSecondary: { backgroundColor: colors.raised, borderWidth: 1, borderColor: colors.panelBorder },
   barSecondaryText: { color: colors.text, fontWeight: '600', fontSize: 15 },

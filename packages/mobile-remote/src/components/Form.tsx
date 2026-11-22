@@ -85,7 +85,7 @@ export function Help({ summary, children }: { summary: string; children?: ReactN
     <Pressable onPress={() => children && setOpen((o) => !o)} disabled={!children} accessibilityRole={children ? 'button' : undefined} style={styles.help}>
       <Text style={formStyles.help}>
         {summary}
-        {children ? <Text style={styles.more}>{open ? '  접기' : '  자세히'}</Text> : null}
+        {children ? <Text style={styles.more}>{open ? '  접\u2060기' : '  자\u2060세\u2060히'}</Text> : null}
       </Text>
       {open ? <Text style={[formStyles.help, { marginTop: 4 }]}>{children}</Text> : null}
     </Pressable>

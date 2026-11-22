@@ -1,3 +1,4 @@
+import { useIsFocused } from 'expo-router/react-navigation';
 import { useEffect, useSyncExternalStore } from 'react';
 
 /** Lets a screen hide the (native) tab bar while it shows its own bottom toolbar, e.g. in select mode. */
@@ -25,10 +26,12 @@ export function useTabBarHidden() {
   );
 }
 
-/** Hides the tab bar while `on` (and when the screen goes away, shows it again). */
+/** Hides the tab bar while `on` and the screen is in front (another tab shows it again). */
 export function useHideTabBar(key: string, on: boolean) {
+  const focused = useIsFocused();
+  const hide = on && focused;
   useEffect(() => {
-    set(key, on);
+    set(key, hide);
     return () => set(key, false);
-  }, [key, on]);
+  }, [key, hide]);
 }

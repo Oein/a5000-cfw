@@ -4,6 +4,7 @@ import { WebView } from 'react-native-webview';
 /**
  * MJPEG live view. React Native's Image can't play multipart/x-mixed-replace on iOS, but
  * WebKit's <img> can; the page retries whenever the stream ends (camera app paused, Wi-Fi hiccup).
+ * A spinner sits behind the picture until the first frame covers it.
  * {@code rotation} turns the (always landscape) frames upright when the camera is held sideways.
  */
 export function LiveView({ url, rotation, style }: { url: string; rotation: number; style?: ViewStyle }) {
@@ -15,8 +16,10 @@ export function LiveView({ url, rotation, style }: { url: string; rotation: numb
   const html = `<!doctype html><html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <style>html,body{margin:0;height:100%;background:#000;overflow:hidden}
-img{object-fit:contain;display:block;${imageCss}}</style></head>
-<body><img id="v"><script>
+img{object-fit:contain;display:block;position:relative;z-index:1;${imageCss}}
+#w{position:fixed;top:50%;left:50%;width:22px;height:22px;margin:-11px;border-radius:50%;border:2.5px solid rgba(235,235,245,.18);border-top-color:rgba(235,235,245,.6);animation:r .9s linear infinite}
+@keyframes r{to{transform:rotate(360deg)}}</style></head>
+<body><div id="w"></div><img id="v"><script>
 var img=document.getElementById('v');
 function connect(){img.src=${JSON.stringify(url)}+'?t='+Date.now();}
 img.onerror=function(){setTimeout(connect,1000);};

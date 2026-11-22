@@ -9,7 +9,7 @@ import { Button, formStyles } from '@/components/Form';
 import { Swatch } from '@/components/recipe/Controls';
 import { colors } from '@/lib/theme';
 import { toast, toastError } from '@/lib/toast';
-import type { Recipe } from '@/features/recipes/model';
+import { problem, type Recipe } from '@/features/recipes/model';
 import { toShareLink } from '@/features/recipes/shareCode';
 import { recipeSummary } from '@/features/recipes/summary';
 import { swatchColors } from '@/features/recipes/swatch';
@@ -21,8 +21,16 @@ import { fileNameFor, writeRecipeFile } from '@/features/recipes/yaml';
  */
 export default function ShareScreen() {
   const { draft } = useLocalSearchParams<{ draft: string }>();
-  const recipe = useMemo(() => JSON.parse(draft) as Recipe, [draft]);
+  const recipe = useMemo(() => {
+    try {
+      const r = JSON.parse(draft ?? '') as Recipe;
+      return problem(r) ? null : r;
+    } catch {
+      return null;
+    }
+  }, [draft]);
   const shared = useMemo(() => {
+    if (!recipe) return { link: null, qrUri: null, error: '공유할 레시피를 읽지 못했어요.' };
     try {
       const link = toShareLink(recipe);
       const qr = makeQr(0, 'M');
@@ -38,6 +46,14 @@ export default function ShareScreen() {
     await Clipboard.setStringAsync(text);
     toast(`${what} 복사됨`);
   };
+
+  if (!recipe) {
+    return (
+      <View style={[styles.screen, styles.content]}>
+        <Text style={styles.error}>{shared.error}</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>

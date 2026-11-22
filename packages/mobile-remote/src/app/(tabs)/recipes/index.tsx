@@ -4,6 +4,7 @@ import { useLayoutEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, SectionList, Share, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Glass } from '@/components/Glass';
 import { Swatch } from '@/components/recipe/Controls';
 import { RecipeRow, SectionHeader } from '@/components/recipe/Library';
 import { showActions } from '@/lib/actionSheet';
@@ -276,12 +277,12 @@ export default function RecipesScreen() {
                   </View>
                 ) : (
                   <Pressable
-                    style={[styles.applyPill, (!connected || busy !== null) && styles.disabled]}
+                    style={[styles.applyPill, (!connected || busy !== null) && styles.applyOff]}
                     disabled={!connected || busy !== null}
                     hitSlop={6}
                     accessibilityLabel={`${displayName(item)} 카메라에 적용`}
                     onPress={() => apply(item)}>
-                    <Text style={styles.applyText}>{busy === item.id ? '…' : '적용'}</Text>
+                    <Text style={[styles.applyText, (!connected || busy !== null) && { color: colors.textFaint }]}>{busy === item.id ? '…' : '적용'}</Text>
                   </Pressable>
                 )
               }
@@ -305,14 +306,14 @@ export default function RecipesScreen() {
         }
       />
       {selecting ? (
-        <View style={[styles.bulkBar, { paddingBottom: insets.bottom ? 12 : 16 }]}>
+        <Glass style={[styles.bulkBar, { paddingBottom: insets.bottom ? insets.bottom : 16 }]}>
           <Text style={styles.bulkCount}>{chosen.length}개 선택</Text>
           <View style={styles.bulkActions}>
             <BulkButton icon={allFav ? 'star' : 'star-outline'} label={allFav ? '해제' : '즐겨찾기'} disabled={!chosen.length} onPress={bulkFavorite} />
             <BulkButton icon="share-outline" label="공유" disabled={!chosen.length} onPress={bulkShare} />
             <BulkButton icon="trash-outline" label="삭제" danger disabled={!chosenMine.length} onPress={bulkDelete} />
           </View>
-        </View>
+        </Glass>
       ) : null}
     </View>
   );
@@ -349,6 +350,7 @@ const styles = StyleSheet.create({
   toolsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 4 },
   link: { color: colors.accent, fontSize: 13, fontWeight: '600' },
   applyPill: { paddingHorizontal: 14, height: 30, borderRadius: 15, borderCurve: 'continuous', backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  applyOff: { backgroundColor: colors.raised },
   applyText: { color: '#000', fontWeight: '700', fontSize: 13 },
   appliedPill: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 10, height: 30, borderRadius: 15, borderCurve: 'continuous', backgroundColor: colors.ok },
   appliedText: { color: '#000', fontWeight: '700', fontSize: 12 },
@@ -359,7 +361,7 @@ const styles = StyleSheet.create({
   emptyButton: { paddingHorizontal: 18, height: 40, borderRadius: 20, borderCurve: 'continuous', backgroundColor: colors.accent, justifyContent: 'center' },
   emptyButtonText: { color: '#000', fontWeight: '700' },
   footer: { color: colors.textDim, fontSize: 12, textAlign: 'center', paddingVertical: 16, paddingHorizontal: 20, lineHeight: 17 },
-  bulkBar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 10, paddingHorizontal: 16, backgroundColor: 'rgba(15,15,16,0.97)', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.hairline, gap: 6 },
+  bulkBar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 10, paddingHorizontal: 16, gap: 6, overflow: 'hidden' },
   bulkCount: { color: colors.textDim, fontSize: 12, textAlign: 'center' },
   bulkActions: { flexDirection: 'row', justifyContent: 'space-around' },
   bulkButton: { alignItems: 'center', gap: 2, minWidth: 72, paddingVertical: 4 },

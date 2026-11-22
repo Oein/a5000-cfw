@@ -437,11 +437,9 @@ export default function ShootScreen() {
 
   // AF-S / AF-C / DMF / MF, green while a half-press holds focus, red if it couldn't focus
   const focusBadge = s && (
-    <View
-      style={[styles.focusBadge, af === 'focused' && styles.focusBadgeOk, af === 'failed' && styles.focusBadgeFail]}
-      pointerEvents="none">
+    <Glass style={styles.focusBadge} tint={af === 'focused' ? 'rgba(48,209,88,0.75)' : af === 'failed' ? 'rgba(255,69,58,0.75)' : undefined}>
       <Text style={styles.focusBadgeText}>{focusModeName(s.focusMode, s.afMode)}</Text>
-    </View>
+    </Glass>
   );
 
   // Green frames where the camera found focus (orange when it couldn't confirm it)
@@ -765,17 +763,7 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', gap: 6 },
   afFrame: { position: 'absolute', borderWidth: 2, borderColor: colors.ok, borderRadius: 2 },
   afFrameWarn: { borderColor: colors.accent },
-  focusBadge: {
-    height: 26,
-    paddingHorizontal: 9,
-    borderRadius: 7,
-    justifyContent: 'center',
-    backgroundColor: colors.overlay,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
-  },
-  focusBadgeOk: { backgroundColor: 'rgba(62,207,110,0.85)', borderColor: colors.ok },
-  focusBadgeFail: { backgroundColor: 'rgba(255,77,77,0.85)', borderColor: colors.danger },
+  focusBadge: { height: 26, paddingHorizontal: 10, borderRadius: 13, borderCurve: 'continuous', justifyContent: 'center', overflow: 'hidden' },
   focusBadgeText: { color: colors.text, fontSize: 12, fontWeight: '700', letterSpacing: 0.4 },
   statusPill: {
     flexDirection: 'row',
