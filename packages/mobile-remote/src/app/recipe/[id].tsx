@@ -85,9 +85,14 @@ export default function RecipeScreen() {
   const invalid = problem(recipe);
   const preview = useLivePreview(client, connected, recipe, previewOn);
   const leaving = useRef(false);
+  // While a control is being dragged (WB pad) the page must not scroll or swipe back; with unsaved
+  // changes, swipe-back is off too (the back button still asks what to do with them).
+  const [dragging, setDragging] = useState(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({
+      gestureEnabled: !dirty && !dragging,
+      fullScreenGestureEnabled: false,
       title: isNew ? '새 레시피' : '레시피 편집',
       headerRight: () => (
         <Pressable hitSlop={10} onPress={more} accessibilityLabel="더 보기" style={{ marginRight: 4 }}>
@@ -211,7 +216,7 @@ export default function RecipeScreen() {
           </Pressable>
         </View>
       ) : null}
-      <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingBottom: 110 + insets.bottom }]} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.scroll} scrollEnabled={!dragging} contentContainerStyle={[styles.content, { paddingBottom: 110 + insets.bottom }]} keyboardShouldPersistTaps="handled">
         <View style={styles.titleRow}>
           <Swatch stops={swatchColors(recipe)} size={48} radius={12} />
           <View style={{ flex: 1 }}>
@@ -258,7 +263,7 @@ export default function RecipeScreen() {
               <Chips values={KELVIN_PRESETS} value={recipe.whiteBalance} onChange={(k) => set({ whiteBalance: k })} label={(k) => `${KELVIN_NAMES[k]} ${k}K`} />
             </>
           ) : null}
-          {wbMode !== 'keep' ? <WbPad amberBlue={recipe.amberBlue} greenMagenta={recipe.greenMagenta} onChange={(amberBlue, greenMagenta) => set({ amberBlue, greenMagenta })} /> : null}
+          {wbMode !== 'keep' ? <WbPad amberBlue={recipe.amberBlue} greenMagenta={recipe.greenMagenta} onChange={(amberBlue, greenMagenta) => set({ amberBlue, greenMagenta })} onActiveChange={setDragging} /> : null}
         </Card>
 
         <Card title="노출 · 다이내믹 레인지">

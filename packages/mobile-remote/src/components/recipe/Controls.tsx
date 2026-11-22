@@ -168,11 +168,14 @@ export function WbPad({
   greenMagenta,
   onChange,
   disabled,
+  onActiveChange,
 }: {
   amberBlue: number;
   greenMagenta: number;
   onChange: (ab: number, gm: number) => void;
   disabled?: boolean;
+  /** true while a finger is on the pad: the screen should stop scrolling / swipe-back meanwhile. */
+  onActiveChange?: (active: boolean) => void;
 }) {
   const [size, setSize] = useState(0);
   const cell = size / PAD_STEPS;
@@ -196,8 +199,15 @@ export function WbPad({
           onLayout={(e: LayoutChangeEvent) => setSize(e.nativeEvent.layout.width)}
           onStartShouldSetResponder={() => !disabled}
           onMoveShouldSetResponder={() => !disabled}
-          onResponderGrant={pick}
+          onResponderGrant={(e) => {
+            onActiveChange?.(true);
+            pick(e);
+          }}
           onResponderMove={pick}
+          // Keep the drag: the scroll view / back gesture must not take it over mid-adjustment
+          onResponderTerminationRequest={() => false}
+          onResponderRelease={() => onActiveChange?.(false)}
+          onResponderTerminate={() => onActiveChange?.(false)}
           accessibilityLabel={`화이트 밸런스 미세조정 A ${amberBlue}, G ${greenMagenta}`}
           accessibilityRole="adjustable">
           {/* tinted quadrants */}

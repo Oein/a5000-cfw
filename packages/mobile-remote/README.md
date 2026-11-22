@@ -43,4 +43,4 @@ tests/                   node --test
 
 ## 출처 / 라이선스
 - UI·카메라 클라이언트는 [Oein/sony-remote-reboot](https://github.com/Oein/sony-remote-reboot) `viewer/`에서 가져옴(같은 저자).
-- 레시피 포맷은 [Recipe Lab](https://github.com/voxivoid/recipe-lab-sony-pmca)(GPL-3.0)의 공개 스펙을 따른 독립 구현 — 그 코드·레시피 표는 포함하지 않음. Recipe Lab의 77개 레시피는 앱에서 "Recipe Lab 레시피 받기"를 누르면 GitHub에서 받아 폰에서 읽는다.
+- 레시피 포맷은 [Recipe Lab](https://github.com/voxivoid/recipe-lab-sony-pmca)(GPL-3.0)의 공개 스펙을 따른 독립 구현 — 그 코드·레시피 표는 포함하지 않음. Recipe Lab의 77개 레시피는 개인 사용 빌드에 내장 — `npm install` 때 생성되는 gitignore 파일(`npm run recipes:bundle`)이라 레포에는 없다.
