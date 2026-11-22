@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
   round: {
     width: 52,
     height: 52,
-    borderRadius: 26,
+    borderRadius: 26, borderCurve: 'continuous',
     backgroundColor: colors.panel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.panelBorder,
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
   roundPressed: { backgroundColor: '#1d1d1f' },
   rocker: {
     flexDirection: 'row',
-    borderRadius: 22,
+    borderRadius: 22, borderCurve: 'continuous',
     backgroundColor: colors.overlay,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.18)',

@@ -22,6 +22,7 @@ import { ThumbImage } from '@/components/ThumbImage';
 import { useCamera } from '@/lib/CameraProvider';
 import { DELETE_DETAIL, deletePhotos, deleteQuestion, usePhotosDeleted } from '@/lib/deletions';
 import { canSaveToPhotos, megabytes, saveOriginal, type DownloadProgress } from '@/lib/save';
+import { useHideTabBar } from '@/lib/tabBar';
 import { colors } from '@/lib/theme';
 
 const PAGE = 60;
@@ -117,6 +118,8 @@ export default function GalleryScreen() {
     setSelected(new Set());
   }, []);
 
+  useHideTabBar('gallery', selecting);
+
   // 사진 | 동영상 and "선택" / "취소" in the title bar, and the selection toolbar in place of the tab bar
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -148,7 +151,6 @@ export default function GalleryScreen() {
             <Text style={styles.headerButtonText}>{selecting ? '취소' : '선택'}</Text>
           </Pressable>
         ),
-      tabBarStyle: selecting ? { display: 'none' } : { backgroundColor: colors.panel, borderTopColor: colors.panelBorder },
     });
   }, [navigation, selecting, saving, items.length, stopSelecting, kind]);
 
@@ -491,7 +493,7 @@ const styles = StyleSheet.create({
   count: { color: colors.textDim, fontSize: 13, padding: 20, textAlign: 'center' },
   footer: { padding: 20 },
   error: { color: colors.danger, padding: 16, textAlign: 'center' },
-  headerButton: { marginRight: 12, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.14)' },
+  headerButton: { marginRight: 12, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, borderCurve: 'continuous', backgroundColor: 'rgba(255,255,255,0.14)' },
   headerButtonText: { color: colors.text, fontSize: 15, fontWeight: '600' },
   segmented: { flexDirection: 'row', padding: 2, borderRadius: 9, backgroundColor: 'rgba(255,255,255,0.1)' },
   segment: { paddingHorizontal: 16, paddingVertical: 4, borderRadius: 7 },
@@ -514,7 +516,7 @@ const styles = StyleSheet.create({
     bottom: 5,
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: 11, borderCurve: 'continuous',
     backgroundColor: colors.accent,
     borderWidth: 1.5,
     borderColor: '#fff',
@@ -547,7 +549,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: 20, borderCurve: 'continuous',
     backgroundColor: 'rgba(40,40,42,0.95)',
   },
   toastText: { color: colors.text, fontSize: 14 },

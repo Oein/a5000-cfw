@@ -37,8 +37,11 @@ export function SectionHeader({
   onToggle,
   onMenu,
   right,
+  plain,
 }: {
   section: Section;
+  /** no background (in a glass sheet); default is opaque for sticky headers */
+  plain?: boolean;
   /** recipes to preview while folded */
   preview?: Listed[];
   onToggle?: () => void;
@@ -48,7 +51,7 @@ export function SectionHeader({
   const icon = SECTION_ICON[section.key] ?? 'film-outline';
   return (
     <Pressable
-      style={({ pressed }) => [styles.header, pressed && onToggle && { opacity: 0.7 }]}
+      style={({ pressed }) => [styles.header, plain && { backgroundColor: 'transparent' }, pressed && onToggle && { opacity: 0.7 }]}
       onPress={onToggle}
       disabled={!onToggle}
       accessibilityRole="button"
@@ -134,7 +137,7 @@ const styles = StyleSheet.create({
   headerCount: { color: colors.textDim, fontSize: 12, fontVariant: ['tabular-nums'] },
   headerMenu: { paddingHorizontal: 4 },
   previewRow: { flexDirection: 'row', gap: 3, marginRight: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.panel, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 10, marginBottom: 4, borderWidth: 1.5, borderColor: 'transparent' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.panel, borderRadius: 12, borderCurve: 'continuous', paddingVertical: 8, paddingHorizontal: 10, marginBottom: 4, borderWidth: 1.5, borderColor: 'transparent' },
   rowCompact: { backgroundColor: 'transparent', paddingVertical: 6, marginBottom: 2 },
   rowApplied: { borderColor: colors.ok },
   rowSelected: { borderColor: colors.accent },

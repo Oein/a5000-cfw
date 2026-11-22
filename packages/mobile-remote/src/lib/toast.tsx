@@ -68,11 +68,11 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: 12, borderCurve: 'continuous',
     overflow: 'hidden',
     fontSize: 14,
     fontWeight: '600',
   },
   error: { backgroundColor: '#2a1a1a', borderColor: colors.danger },
-  info: { backgroundColor: '#1d1d20', borderColor: colors.panelBorder },
+  info: { backgroundColor: colors.raised, borderColor: colors.panelBorder },
 });

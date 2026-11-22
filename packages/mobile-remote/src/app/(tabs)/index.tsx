@@ -35,6 +35,7 @@ import {
 import { useMoviePlaying } from '@/lib/playback';
 import { useSession } from '@/features/session/session';
 import { colors } from '@/lib/theme';
+import { Glass } from '@/components/Glass';
 
 const STATE_POLL_MS = 1000;
 /** How often the newest photo is checked, to follow how the camera was held for it. */
@@ -59,7 +60,8 @@ const DIAL_MARGIN = 12;
 const PORTRAIT_DIAL_H = 200;
 const PORTRAIT_FOCUS_H = 52;
 const PORTRAIT_CAPTURE_H = 106;
-const TAB_BAR_H = 50;
+/** The floating native tab bar (iOS 26) sits over the content: keep the controls above it. */
+const TAB_BAR_H = 58;
 
 type Sheet = { title: string; wheels: Wheel[]; toChanges: (changed: Record<string, string>) => CameraChanges };
 type AfState = 'idle' | 'focusing' | 'focused' | 'failed';
@@ -406,7 +408,7 @@ export default function ShootScreen() {
   );
 
   const statusPill = (
-    <View style={styles.statusPill} pointerEvents="none">
+    <Glass style={styles.statusPill}>
       <View style={[styles.dot, { backgroundColor: connected ? colors.ok : colors.danger }]} />
       <Text style={styles.statusText} numberOfLines={1}>
         {connected ? info?.model : '연결 안 됨'}
@@ -430,7 +432,7 @@ export default function ShootScreen() {
       )}
       {recording && <Text style={[styles.statusText, styles.recTime]}>REC {formatDuration(s?.movie?.seconds ?? 0)}</Text>}
       {busy && <ActivityIndicator size="small" color={colors.accent} style={styles.busy} />}
-    </View>
+    </Glass>
   );
 
   // AF-S / AF-C / DMF / MF, green while a half-press holds focus, red if it couldn't focus
@@ -487,11 +489,13 @@ export default function ShootScreen() {
       {connected && !cameraKnowsOrientation && (
         <Pressable
           // Top right, clear of the zoom control (which sits there itself when sideways)
-          style={[styles.rotateButton, landscape && overlay && { top: 58 }]}
+          style={[styles.rotatePos, landscape && overlay && { top: 58 }]}
           onPress={() => setManualRotation((r) => (r + 90) % 360)}
           accessibilityRole="button"
           accessibilityLabel="라이브뷰 돌리기">
-          <Ionicons name="refresh" size={18} color={colors.text} />
+          <Glass style={styles.rotateButton} interactive>
+            <Ionicons name="refresh" size={18} color={colors.text} />
+          </Glass>
         </Pressable>
       )}
       <View style={styles.statusCorner} pointerEvents="box-none">
@@ -505,7 +509,7 @@ export default function ShootScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.screen} edges={landscape ? ['top', 'left', 'right', 'bottom'] : ['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.screen, !landscape && { paddingBottom: TAB_BAR_H }]} edges={['top', 'left', 'right', 'bottom']}>
       {landscape ? (
         <View style={styles.landscape}>
           {overlay ? (
@@ -779,24 +783,22 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 10,
     height: 26,
-    borderRadius: 13,
-    backgroundColor: colors.overlay,
+    borderRadius: 13, borderCurve: 'continuous',
+    overflow: 'hidden',
   },
   dot: { width: 7, height: 7, borderRadius: 3.5 },
   statusText: { color: colors.text, fontSize: 12, fontWeight: '600', letterSpacing: 0.2 },
   busy: { transform: [{ scale: 0.7 }] },
   zoomCorner: { position: 'absolute', right: 12, bottom: 12 },
   zoomCornerTop: { position: 'absolute', right: 10, top: 10 },
+  rotatePos: { position: 'absolute', right: 10, top: 10 },
   rotateButton: {
-    position: 'absolute',
-    right: 10,
-    top: 10,
     width: 34,
     height: 34,
-    borderRadius: 17,
+    borderRadius: 17, borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.overlay,
+    overflow: 'hidden',
   },
   panelZoom: { alignItems: 'center', marginTop: 8 },
   statusItem: { flexDirection: 'row', alignItems: 'center', gap: 2 },
@@ -809,7 +811,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginHorizontal: DIAL_MARGIN,
-    borderRadius: 16,
+    borderRadius: 16, borderCurve: 'continuous',
     backgroundColor: colors.panel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.hairline,
@@ -830,7 +832,7 @@ const styles = StyleSheet.create({
   focusBar: { flex: 1 },
   magnifierOn: { backgroundColor: colors.accent },
   magnifierText: { color: '#000', fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  focusButton: { width: 44, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.panel },
+  focusButton: { width: 44, height: 36, borderRadius: 10, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.panel },
   focusButtonCompact: { width: 38, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.12)' },
   focusHint: { color: colors.textDim, fontSize: 12, textAlign: 'center' },
 
@@ -865,7 +867,7 @@ const styles = StyleSheet.create({
   af: {
     width: 50,
     height: 50,
-    borderRadius: 25,
+    borderRadius: 25, borderCurve: 'continuous',
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
@@ -874,7 +876,7 @@ const styles = StyleSheet.create({
   rec: {
     width: 50,
     height: 50,
-    borderRadius: 25,
+    borderRadius: 25, borderCurve: 'continuous',
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.7)',
     alignItems: 'center',
@@ -882,7 +884,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
   recRecording: { borderColor: colors.danger },
-  recMark: { width: 20, height: 20, borderRadius: 10, backgroundColor: colors.danger },
+  recMark: { width: 20, height: 20, borderRadius: 10, borderCurve: 'continuous', backgroundColor: colors.danger },
   recMarkStop: { width: 16, height: 16, borderRadius: 3 },
   recTime: { color: colors.danger, fontVariant: ['tabular-nums'] },
   afPressed: { backgroundColor: 'rgba(255,255,255,0.16)' },
@@ -890,7 +892,7 @@ const styles = StyleSheet.create({
   thumb: {
     width: 50,
     height: 50,
-    borderRadius: 10,
+    borderRadius: 10, borderCurve: 'continuous',
     overflow: 'hidden',
     backgroundColor: colors.panel,
     borderWidth: StyleSheet.hairlineWidth,
@@ -906,7 +908,7 @@ const styles = StyleSheet.create({
     left: 24,
     right: 24,
     backgroundColor: 'rgba(40,40,40,0.95)',
-    borderRadius: 12,
+    borderRadius: 12, borderCurve: 'continuous',
     padding: 12,
   },
   toastText: { color: colors.text, fontSize: 14, textAlign: 'center' },

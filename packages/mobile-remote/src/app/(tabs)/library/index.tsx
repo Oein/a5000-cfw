@@ -72,6 +72,7 @@ export default function LibraryScreen() {
       sections={sections}
       keyExtractor={(row) => row[0].key}
       stickySectionHeadersEnabled
+      contentInsetAdjustmentBehavior="automatic"
       refreshControl={<RefreshControl refreshing={status.running} onRefresh={refresh} tintColor={colors.accent} />}
       ListHeaderComponent={
         <View style={styles.status}>

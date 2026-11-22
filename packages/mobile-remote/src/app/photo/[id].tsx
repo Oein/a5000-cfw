@@ -505,7 +505,7 @@ const styles = StyleSheet.create({
     gap: 10,
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
-  backButton: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.12)' },
+  backButton: { width: 36, height: 36, borderRadius: 18, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.12)' },
   topTitle: { flex: 1, color: colors.text, fontSize: 15, fontWeight: '600', textAlign: 'center', marginRight: 46, textShadowColor: '#000', textShadowRadius: 4 },
   toolButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   toolGroup: { flexDirection: 'row', alignItems: 'center' },

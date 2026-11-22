@@ -55,6 +55,9 @@ UI 베이스: [sony-remote-reboot/viewer](https://github.com/Oein/sony-remote-re
 - 촬영 화면: 라이브뷰 위 **레시피 pill** → 즐겨찾기 우선 시트에서 바로 전환. **위치 pill**(±m, 보낸 장수, 남은 동기화) → 설정.
 
 ### 공통 UX
+- **iOS 26 룩(Liquid Glass)**: 탭바는 `NativeTabs`(UITabBarController — Liquid Glass, 스크롤 시 최소화, SF Symbols). 촬영 외 탭은 각자 Stack + 큰 제목(스크롤하면 접힘, 투명 헤더 + 스크롤 엣지 효과), 레시피 탭은 네이티브 검색바. 색은 iOS 시스템 다크 팔레트(systemGrouped 배경·secondaryLabel·separator·systemOrange/Green/Red), 둥근 모서리는 continuous(squircle). 라이브뷰 위 알약·버튼과 레시피 빠른 전환 시트는 `expo-glass-effect` GlassView(iOS 26 미만은 반투명 폴백).
+- 빠른 전환 시트는 네이티브 formSheet가 아니라 Glass 하프 시트(Modal): formSheet는 탭 포커스를 빼앗아 라이브뷰가 멈춤. 위쪽을 아래로 끌면 닫히고, 촬영 탭을 벗어나면 자동으로 닫힘.
+- 선택 모드(갤러리·레시피)는 `useHideTabBar`로 탭바를 숨기고 자체 툴바를 띄움. 네이티브 탭바는 콘텐츠 위에 떠 있어서 촬영 화면은 그 높이(`TAB_BAR_H`)만큼 아래를 비움.
 - 토스트 + 햅틱으로 결과 피드백(적용/저장/실패). 인라인 메시지 제거.
 - 설정: 연결 카드(상태·주소·AP/mock 빠른 선택) → 연동·위치 → 동기화 → 위치 기록 → 저장 공간. 긴 설명은 "자세히"로 접고, 파괴적 동작은 카드 안 행 + 확인.
 - 보관함: 날짜별 섹션, 당겨서 지금 동기화, 빈 상태 안내.

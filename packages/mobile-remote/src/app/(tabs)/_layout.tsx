@@ -1,60 +1,42 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { Tabs } from 'expo-router/js-tabs';
+import { usePathname } from 'expo-router';
+import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { useWindowDimensions } from 'react-native';
 
+import { useTabBarHidden } from '@/lib/tabBar';
 import { colors } from '@/lib/theme';
 
+/**
+ * Native tab bar (UITabBarController: Liquid Glass on iOS 26+, minimises while scrolling). Each tab
+ * but the shooting screen is a stack with a large title. Sideways the shooting screen goes full
+ * screen, like a camera app; screens in select mode hide the bar for their own toolbar.
+ */
 export default function TabLayout() {
   const { width, height } = useWindowDimensions();
-  const tabBarStyle = { backgroundColor: colors.panel, borderTopColor: colors.panelBorder };
+  const pathname = usePathname();
+  const screenHides = useTabBarHidden();
+  const shooting = pathname === '/';
   return (
-    <Tabs
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.panel },
-        headerTintColor: colors.text,
-        tabBarStyle,
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.textDim,
-        sceneStyle: { backgroundColor: colors.background },
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: '촬영',
-          headerShown: false,
-          // Sideways the shooting screen goes full screen, like a camera app
-          tabBarStyle: width > height ? { display: 'none' } : tabBarStyle,
-          tabBarIcon: ({ color, size }) => <Ionicons name="camera-outline" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="gallery"
-        options={{
-          title: '갤러리',
-          tabBarIcon: ({ color, size }) => <Ionicons name="images-outline" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="recipes"
-        options={{
-          title: '레시피',
-          tabBarIcon: ({ color, size }) => <Ionicons name="color-palette-outline" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="library"
-        options={{
-          title: '보관함',
-          tabBarIcon: ({ color, size }) => <Ionicons name="albums-outline" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: '설정',
-          tabBarIcon: ({ color, size }) => <Ionicons name="settings-outline" size={size} color={color} />,
-        }}
-      />
-    </Tabs>
+    <NativeTabs tintColor={colors.accent} minimizeBehavior="onScrollDown" hidden={screenHides || (shooting && width > height)}>
+      <NativeTabs.Trigger name="index">
+        <NativeTabs.Trigger.Icon sf={{ default: 'camera', selected: 'camera.fill' }} md="photo_camera" />
+        <NativeTabs.Trigger.Label>촬영</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="gallery">
+        <NativeTabs.Trigger.Icon sf={{ default: 'photo.on.rectangle', selected: 'photo.fill.on.rectangle.fill' }} md="photo_library" />
+        <NativeTabs.Trigger.Label>갤러리</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="recipes">
+        <NativeTabs.Trigger.Icon sf={{ default: 'camera.filters', selected: 'camera.filters' }} md="palette" />
+        <NativeTabs.Trigger.Label>레시피</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="library">
+        <NativeTabs.Trigger.Icon sf={{ default: 'square.stack', selected: 'square.stack.fill' }} md="collections" />
+        <NativeTabs.Trigger.Label>보관함</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="settings">
+        <NativeTabs.Trigger.Icon sf={{ default: 'gearshape', selected: 'gearshape.fill' }} md="settings" />
+        <NativeTabs.Trigger.Label>설정</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+    </NativeTabs>
   );
 }

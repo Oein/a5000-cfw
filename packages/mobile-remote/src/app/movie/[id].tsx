@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: 20, borderCurve: 'continuous',
     backgroundColor: 'rgba(40,40,42,0.95)',
   },
   toastText: {

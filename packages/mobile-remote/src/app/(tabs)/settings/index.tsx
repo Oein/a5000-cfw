@@ -36,7 +36,8 @@ export default function SettingsScreen() {
     <ScrollView
       style={styles.screen}
       contentContainerStyle={[styles.content, { paddingLeft: 16 + insets.left, paddingRight: 16 + insets.right }]}
-      keyboardShouldPersistTaps="handled">
+      keyboardShouldPersistTaps="handled"
+      contentInsetAdjustmentBehavior="automatic">
       {/* Connection card */}
       <View style={[styles.conn, { borderColor: connected ? 'rgba(62,207,110,0.5)' : 'rgba(255,77,77,0.4)' }]}>
         <View style={styles.connHead}>
@@ -99,7 +100,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   content: { paddingTop: 16, gap: 8, paddingBottom: 40 },
-  conn: { backgroundColor: colors.panel, borderRadius: 14, padding: 14, gap: 8, borderWidth: 1 },
+  conn: { backgroundColor: colors.panel, borderRadius: 14, borderCurve: 'continuous', padding: 14, gap: 8, borderWidth: 1 },
   connHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   connTitle: { color: colors.text, fontSize: 18, fontWeight: '700' },
   connDetail: { color: colors.textDim, fontSize: 12, marginTop: 2 },
@@ -107,14 +108,14 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: 44,
-    borderRadius: 10,
-    backgroundColor: '#1d1d20',
+    borderRadius: 10, borderCurve: 'continuous',
+    backgroundColor: colors.raised,
     color: colors.text,
     fontSize: 16,
     paddingHorizontal: 12,
     fontVariant: ['tabular-nums'],
   },
-  connect: { height: 44, borderRadius: 10, backgroundColor: colors.accent, paddingHorizontal: 18, justifyContent: 'center' },
-  connectDone: { backgroundColor: '#1d1d20' },
+  connect: { height: 44, borderRadius: 10, borderCurve: 'continuous', backgroundColor: colors.accent, paddingHorizontal: 18, justifyContent: 'center' },
+  connectDone: { backgroundColor: colors.raised },
   connectText: { color: '#000', fontWeight: '700' },
 });

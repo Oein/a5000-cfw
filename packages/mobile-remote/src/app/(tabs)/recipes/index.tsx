@@ -1,13 +1,14 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useNavigation } from 'expo-router';
 import { useLayoutEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, SectionList, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, SectionList, Share, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Swatch } from '@/components/recipe/Controls';
 import { RecipeRow, SectionHeader } from '@/components/recipe/Library';
 import { showActions } from '@/lib/actionSheet';
 import { useCamera } from '@/lib/CameraProvider';
+import { useHideTabBar } from '@/lib/tabBar';
 import { colors } from '@/lib/theme';
 import { toast } from '@/lib/toast';
 import { applyWithFeedback, confirmDelete, newFromCamera, openDuplicate, openEditor, openShare } from '@/features/recipes/actions';
@@ -45,6 +46,7 @@ export default function RecipesScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  useHideTabBar('recipes', selecting);
 
   const create = () =>
     showActions('새 레시피', [
@@ -60,16 +62,23 @@ export default function RecipesScreen() {
 
   useLayoutEffect(() => {
     navigation.setOptions({
+      headerSearchBarOptions: {
+        placeholder: `${recipes.length}개에서 검색 — 이름·브랜드·스타일`,
+        hideWhenScrolling: false,
+        autoCapitalize: 'none',
+        onChangeText: (e: { nativeEvent: { text: string } }) => setQuery(e.nativeEvent.text),
+        onCancelButtonPress: () => setQuery(''),
+      },
       headerLeft: () =>
         recipes.length > 1 ? (
-          <Pressable hitSlop={10} onPress={() => (selecting ? stopSelecting() : setSelecting(true))} style={{ marginLeft: 14 }}>
+          <Pressable hitSlop={10} onPress={() => (selecting ? stopSelecting() : setSelecting(true))} style={styles.headerText}>
             <Text style={styles.headerButton}>{selecting ? '완료' : '선택'}</Text>
           </Pressable>
         ) : null,
       headerRight: () =>
         selecting ? null : (
-          <Pressable accessibilityLabel="새 레시피" hitSlop={10} onPress={create} style={{ marginRight: 14 }}>
-            <Ionicons name="add-circle" size={26} color={colors.accent} />
+          <Pressable accessibilityLabel="새 레시피" hitSlop={10} onPress={create} style={styles.headerIcon}>
+            <Ionicons name="add" size={26} color={colors.accent} />
           </Pressable>
         ),
     });
@@ -192,19 +201,6 @@ export default function RecipesScreen() {
           ) : null}
         </View>
       ) : null}
-      <View style={styles.searchWrap}>
-        <Ionicons name="search" size={16} color={colors.textDim} />
-        <TextInput
-          style={styles.search}
-          value={query}
-          onChangeText={setQuery}
-          placeholder={`${recipes.length}개에서 검색 — 이름·브랜드·스타일`}
-          placeholderTextColor={colors.textDim}
-          autoCorrect={false}
-          clearButtonMode="while-editing"
-          returnKeyType="search"
-        />
-      </View>
       {!searching ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scopes}>
           {scopes.map((s) => {
@@ -238,6 +234,7 @@ export default function RecipesScreen() {
         ListHeaderComponent={header}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        contentInsetAdjustmentBehavior="automatic"
         stickySectionHeadersEnabled
         renderSectionHeader={({ section }) => {
           const s = section as Section<StoredRecipe>;
@@ -334,32 +331,32 @@ function BulkButton({ icon, label, onPress, disabled, danger }: { icon: keyof ty
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   list: { paddingHorizontal: 12, paddingBottom: 24 },
+  headerIcon: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  headerText: { paddingHorizontal: 8 },
   headerButton: { color: colors.accent, fontSize: 16, fontWeight: '600' },
   headerArea: { gap: 8, paddingTop: 12, paddingBottom: 4 },
-  nowCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.panel, borderRadius: 14, padding: 10 },
-  nowIcon: { width: 40, height: 40, borderRadius: 10, backgroundColor: '#1d1d20', alignItems: 'center', justifyContent: 'center' },
+  nowCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.panel, borderRadius: 14, borderCurve: 'continuous', padding: 10 },
+  nowIcon: { width: 40, height: 40, borderRadius: 10, borderCurve: 'continuous', backgroundColor: colors.raised, alignItems: 'center', justifyContent: 'center' },
   nowLabel: { color: colors.textDim, fontSize: 12 },
   nowName: { color: colors.text, fontSize: 16, fontWeight: '700', marginTop: 2 },
-  nowButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, height: 30, borderRadius: 15, borderWidth: 1, borderColor: colors.accent },
+  nowButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, height: 30, borderRadius: 15, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.accent },
   nowButtonText: { color: colors.accent, fontSize: 12, fontWeight: '700' },
-  searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, height: 38, borderRadius: 10, backgroundColor: colors.panel },
-  search: { flex: 1, color: colors.text, fontSize: 15 },
   scopes: { gap: 6, paddingVertical: 2 },
-  scope: { paddingHorizontal: 12, height: 30, borderRadius: 15, backgroundColor: '#1d1d20', justifyContent: 'center' },
+  scope: { paddingHorizontal: 12, height: 30, borderRadius: 15, borderCurve: 'continuous', backgroundColor: colors.raised, justifyContent: 'center' },
   scopeOn: { backgroundColor: colors.accent },
   scopeText: { color: colors.text, fontSize: 13, fontWeight: '600' },
   scopeTextOn: { color: '#000' },
   toolsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 4 },
   link: { color: colors.accent, fontSize: 13, fontWeight: '600' },
-  applyPill: { paddingHorizontal: 14, height: 30, borderRadius: 15, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  applyPill: { paddingHorizontal: 14, height: 30, borderRadius: 15, borderCurve: 'continuous', backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   applyText: { color: '#000', fontWeight: '700', fontSize: 13 },
-  appliedPill: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 10, height: 30, borderRadius: 15, backgroundColor: colors.ok },
+  appliedPill: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 10, height: 30, borderRadius: 15, borderCurve: 'continuous', backgroundColor: colors.ok },
   appliedText: { color: '#000', fontWeight: '700', fontSize: 12 },
   disabled: { opacity: 0.35 },
   packText: { color: colors.textDim, fontSize: 12, lineHeight: 17, flexShrink: 1 },
   empty: { alignItems: 'center', padding: 32, gap: 14 },
   emptyText: { color: colors.textDim, textAlign: 'center', lineHeight: 20 },
-  emptyButton: { paddingHorizontal: 18, height: 40, borderRadius: 20, backgroundColor: colors.accent, justifyContent: 'center' },
+  emptyButton: { paddingHorizontal: 18, height: 40, borderRadius: 20, borderCurve: 'continuous', backgroundColor: colors.accent, justifyContent: 'center' },
   emptyButtonText: { color: '#000', fontWeight: '700' },
   footer: { color: colors.textDim, fontSize: 12, textAlign: 'center', paddingVertical: 16, paddingHorizontal: 20, lineHeight: 17 },
   bulkBar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 10, paddingHorizontal: 16, backgroundColor: 'rgba(15,15,16,0.97)', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.hairline, gap: 6 },
